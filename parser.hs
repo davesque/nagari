@@ -1,3 +1,4 @@
+import Data.Char
 import Data.List.Utils -- requires MissingH
 
 -- Expressions
@@ -51,4 +52,49 @@ infix 7 ?
 (?) :: Parser a -> (a -> Bool) -> Parser a
 (m ? p) xs = case m xs of
     Nothing      -> Nothing
-    Just (y, ys) -> if p y then Just(y, ys) else Nothing
+    Just (y, ys) -> if p y then Just (y, ys) else Nothing
+
+-- Digit
+digit :: Parser Char
+digit = char ? isDigit
+
+-- Alternative parser operator
+infixl 3 !
+(!) :: Parser a -> Parser a -> Parser a
+(m ! n) xs = case m xs of
+    Nothing -> n xs
+    _       -> m xs
+
+space :: Parser Char
+space = char ? isSpace
+
+letter :: Parser Char
+letter = char ? isAlpha
+
+alphanum :: Parser Char
+alphanum = letter ! digit
+
+lit :: Char -> Parser Char
+lit x = char ? (==x)
+
+-- Parser composition operator
+infixl 6 #
+(#) :: Parser a -> Parser b -> Parser (a, b)
+(m # n) xs = case m xs of
+    Nothing      -> Nothing
+    Just (y, ys) -> case n ys of
+        Nothing      -> Nothing
+        Just (z, zs) -> Just ((y, z), zs)
+
+twochars :: Parser (Char, Char)
+twochars = char # char
+
+becomes' :: Parser (Char, Char)
+becomes' = (char # char) ? (==(':', '='))
+
+-- Parser map operator
+infixl 5 >->
+(>->) :: Parser a -> (a -> b) -> Parser b
+(m >-> f) xs = case m xs of
+    Nothing      -> Nothing
+    Just (y, ys) -> Just (f y, ys)
