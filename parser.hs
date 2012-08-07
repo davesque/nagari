@@ -1,5 +1,4 @@
 import Data.Char
-import Data.List.Utils -- requires MissingH
 
 -- Expressions
 data Expr =
@@ -18,21 +17,6 @@ data Statement =
 
 -- Combinator type
 type Parser a = String -> Maybe (a, String)
-
--- Semicolon
-semicolon :: Parser Char
-semicolon "" = Nothing
-semicolon (x:xs)
-    | x == ';'  = Just (x, xs)
-    | otherwise = Nothing
-
--- Becomes
-becomes :: Parser String
-becomes "" = Nothing
-becomes xs
-    | fst parts == ":=" = Just (fst parts, snd parts)
-    | otherwise         = Nothing
-    where parts = splitAt 2 xs
 
 -- Char
 char :: Parser Char
@@ -89,8 +73,11 @@ infixl 6 #
 twochars :: Parser (Char, Char)
 twochars = char # char
 
-becomes' :: Parser (Char, Char)
-becomes' = (char # char) ? (==(':', '='))
+semicolon :: Parser Char
+semicolon = lit ';'
+
+becomes :: Parser (Char, Char)
+becomes = twochars ? (==(':', '='))
 
 -- Parser map operator
 infixl 5 >->
@@ -98,3 +85,58 @@ infixl 5 >->
 (m >-> f) xs = case m xs of
     Nothing      -> Nothing
     Just (y, ys) -> Just (f y, ys)
+
+digitVal :: Parser Int
+digitVal = digit >-> digitToInt
+
+upcaseLetter :: Parser Char
+upcaseLetter = letter >-> toUpper
+
+sndChar :: Parser Char
+sndChar = twochars >-> snd
+
+twochars' :: Parser String
+twochars' = (char # char) >-> (\(x, y) -> [x, y])
+
+infixl 4 -#
+(-#) :: Parser a -> Parser b -> Parser b
+m -# n = (m # n) >-> snd
+
+infixl 4 #-
+(#-) :: Parser a -> Parser b -> Parser a
+m #- n = (m # n) >-> fst
+
+{-----
+ - Applies a parser to a string `i` times and concatenates the results into an
+ - array.
+ -----}
+iterate :: Parser a -> Int -> Parser [a]
+iterate m 0 = Main.return []
+iterate m i = m # Main.iterate m (i-1) >-> cons
+
+cons :: (a, [a]) -> [a]
+cons (x, xs) = x:xs
+
+iterateWhile :: Parser a -> Parser [a]
+iterateWhile m = m # iterateWhile m >-> cons ! Main.return []
+
+letters :: Parser String
+letters = letter # iterateWhile letter >-> cons
+
+token :: Parser a -> Parser a
+token m = m #- iterateWhile space
+
+word :: Parser String
+word = token letters
+
+accept :: String -> Parser String
+accept s = token (Main.iterate char (length s) ? (==s))
+
+infix 4 #>
+(#>) :: Parser a -> (a -> Parser b) -> Parser b
+(m #> f) xs = case m xs of
+    Nothing      -> Nothing
+    Just (y, ys) -> f y ys
+
+double :: Parser Char
+double = char #> lit
