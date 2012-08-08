@@ -62,13 +62,13 @@ lit :: Char -> Parser Char
 lit x = char ? (==x)
 
 -- Parser composition operator
-infixl 6 #
-(#) :: Parser a -> Parser b -> Parser (a, b)
-(m # n) xs = case m xs of
-    Nothing      -> Nothing
-    Just (y, ys) -> case n ys of
-        Nothing      -> Nothing
-        Just (z, zs) -> Just ((y, z), zs)
+--  infixl 6 #
+--  (#) :: Parser a -> Parser b -> Parser (a, b)
+--  (m # n) xs = case m xs of
+--      Nothing      -> Nothing
+--      Just (y, ys) -> case n ys of
+--          Nothing      -> Nothing
+--          Just (z, zs) -> Just ((y, z), zs)
 
 twochars :: Parser (Char, Char)
 twochars = char # char
@@ -132,11 +132,40 @@ word = token letters
 accept :: String -> Parser String
 accept s = token (Main.iterate char (length s) ? (==s))
 
+{-
+ - Applies a function `f` to the result of a parser `m`
+ -}
 infix 4 #>
 (#>) :: Parser a -> (a -> Parser b) -> Parser b
 (m #> f) xs = case m xs of
     Nothing      -> Nothing
     Just (y, ys) -> f y ys
 
+{- 
+ - Takes one char and passes the result to lit, which parses one more char.
+ - Returns only one instance of that char.
+ -}
 double :: Parser Char
 double = char #> lit
+
+number :: Parser Int
+number = token (iterateWhile digit) >-> read
+
+build :: a -> b -> (a, b)
+build x y = (x, y)
+
+infixl 6 #
+(#) :: Parser a -> Parser b -> Parser (a, b)
+m # n = m #> (\x -> n >-> build x)
+
+var :: Parser Expr
+var = word >-> Var
+
+num :: Parser Expr
+num = number >-> Num
+
+{-
+ - Grammar definition
+ -}
+--  mulOp :: Parser ((Expr, Expr) -> Expr)
+--  mulOp = lit '*' >-> (\_ -> Mul)
