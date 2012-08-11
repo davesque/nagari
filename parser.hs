@@ -135,6 +135,13 @@ iterateWhile :: Parser a -> Parser [a]
 iterateWhile m = m # iterateWhile m >-> cons ! Main.return []
 
 {-
+ - Converts a parser `p` into a parser which will clear any whitespace after
+ - the successfully parsed portion of a string.
+ -}
+token :: Parser a -> Parser a
+token p = p #- (iterateWhile space)
+
+{-
  - Parses a single char.
  -}
 char :: Parser Char
@@ -220,30 +227,39 @@ letters :: Parser String
 letters = letter # iterateWhile letter >-> cons
 
 {-
- - Converts a parser `m` into a parser which will eat any whitespace after that
- - which if successfully parsed.
+ - Parses a word as a token.
  -}
-token :: Parser a -> Parser a
-token m = m #- iterateWhile space
-
 word :: Parser String
 word = token letters
 
+{-
+ - Parses a string s as a token.
+ -}
 accept :: String -> Parser String
 accept s = token (Main.iterate char (length s) ? (==s))
 
 {- 
- - Takes one char and passes the result to lit, which parses one more char.
- - Returns only one instance of that char.
+ - Parses two of the same char value.  The `char` parser parses one char, which
+ - is then passed to `lit` to create another parser which will accept the same
+ - char.
  -}
 double :: Parser Char
 double = char #> lit
 
+{-
+ - Parses a number as a token and returns its integer value.
+ -}
 number :: Parser Int
 number = token (iterateWhile digit) >-> read
 
+{-
+ - Parses a word as a token and returns it as a `Var` value.
+ -}
 var :: Parser Expr
 var = word >-> Var
 
+{-
+ - Parses a number as a token and returns it as a `Num` value.
+ -}
 num :: Parser Expr
 num = number >-> Num
