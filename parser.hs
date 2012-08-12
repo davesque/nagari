@@ -1,3 +1,6 @@
+module Parse where
+
+import Prelude hiding (fail, return, iterate)
 import Data.Char
 
 {-
@@ -37,20 +40,24 @@ data Statement =
 type Parser a = String -> Maybe (a, String)
 
 {-
+ - Prints error message.
+ -}
+err :: String -> Parser a
+err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
+
+{-
  - Filters the result of a parser `p` with a boolean function `f`.
  -}
-infix 7 `pfilter`
-pfilter :: Parser a -> (a -> Bool) -> Parser a
-pfilter p f xs = case p xs of
+pfilter :: (a -> Bool) -> Parser a -> Parser a
+pfilter f p xs = case p xs of
     Nothing -> Nothing
     r@(Just (y, ys)) -> if f y then r else Nothing
 infix 7 ?
-(?) = pfilter
+p ? f = pfilter f p
 
 {-
  - Returns the result of an alternative parser `q` if a parser `p` fails.
  -}
-infixl 3 `palternative`
 palternative :: Parser a -> Parser a -> Parser a
 palternative p q xs = case p xs of
     Nothing -> q xs
@@ -61,49 +68,44 @@ infixl 3 !
 {-
  - Maps a function `f` over the parsed portion of the result of a parser `p`.
  -}
-infixl 5 `pmap`
-pmap :: Parser a -> (a -> b) -> Parser b
-pmap p f xs = case p xs of
+pmap :: (a -> b) -> Parser a -> Parser b
+pmap f p xs = case p xs of
     Nothing      -> Nothing
     Just (y, ys) -> Just (f y, ys)
-infixl 5 >->
-(>->) = pmap
+infixl 5 >>-
+p >>- f = pmap f p
 
 {-
  - Provides the result of a parser `p` to another parser which is returned by a function `f`.
  -}
-infix 4 `pbind`
-pbind :: Parser a -> (a -> Parser b) -> Parser b
-pbind p f xs = case p xs of
+pbind :: (a -> Parser b) -> Parser a -> Parser b
+pbind f p xs = case p xs of
     Nothing      -> Nothing
     Just (y, ys) -> f y ys
 infix 4 #>
-(#>) = pbind
+p #> f = pbind f p
 
 {-
  - Concatenates the results of two parsers `p` and `q` into a tuple.
  -}
-infixl 6 `pcat`
 pcat :: Parser a -> Parser b -> Parser (a, b)
-pcat m n = m #> (\x -> n >-> build x)
+pcat m n = m #> (\x -> n >>- build x)
 infixl 6 #
 (#) = pcat
 
 {-
  - Returns the result of the first of two parsers `p` and `q`.
  -}
-infixl 4 `psnd`
 psnd :: Parser a -> Parser b -> Parser b
-psnd m n = (m # n) >-> snd
+psnd m n = (m # n) >>- snd
 infixl 4 -#
 (-#) = psnd
 
 {-
  - Returns the result of the second of two parsers `p` and `q`.
  -}
-infixl 4 `pfst`
 pfst :: Parser a -> Parser b -> Parser a
-pfst m n = (m # n) >-> fst
+pfst m n = (m # n) >>- fst
 infixl 4 #-
 (#-) = pfst
 
@@ -124,15 +126,15 @@ fail xs = Nothing
  - array.
  -}
 iterate :: Parser a -> Int -> Parser [a]
-iterate m 0 = Main.return []
-iterate m i = m # Main.iterate m (i-1) >-> cons
+iterate m 0 = return []
+iterate m i = m # iterate m (i-1) >>- cons
 
 {-
  - Parses a string while a parser `m` succeeds and returns all results as an
  - array.
  -}
 iterateWhile :: Parser a -> Parser [a]
-iterateWhile m = m # iterateWhile m >-> cons ! Main.return []
+iterateWhile m = m # iterateWhile m >>- cons ! return []
 
 {-
  - Converts a parser `p` into a parser which will clear any whitespace after
@@ -200,31 +202,31 @@ becomes = twochars ? (==(':', '='))
  - Parses a single digit char and converts it to an integer value.
  -}
 digitVal :: Parser Int
-digitVal = digit >-> digitToInt
+digitVal = digit >>- digitToInt
 
 {-
  - Parses a single alphabetical char and converts it to uppercase.
  -}
 upcaseLetter :: Parser Char
-upcaseLetter = letter >-> toUpper
+upcaseLetter = letter >>- toUpper
 
 {-
  - Returns the second char of two parsed chars.
  -}
 sndChar :: Parser Char
-sndChar = twochars >-> snd
+sndChar = twochars >>- snd
 
 {-
  - Returns two parsed chars as a string.
  -}
 twochars' :: Parser String
-twochars' = (char # char) >-> (\(x, y) -> [x, y])
+twochars' = (char # char) >>- (\(x, y) -> [x, y])
 
 {-
  - Parses a sequence of letters.
  -}
 letters :: Parser String
-letters = letter # iterateWhile letter >-> cons
+letters = letter # iterateWhile letter >>- cons
 
 {-
  - Parses a word as a token.
@@ -236,7 +238,7 @@ word = token letters
  - Parses a string s as a token.
  -}
 accept :: String -> Parser String
-accept s = token (Main.iterate char (length s) ? (==s))
+accept s = token (iterate char (length s) ? (==s))
 
 {- 
  - Parses two of the same char value.  The `char` parser parses one char, which
@@ -250,16 +252,78 @@ double = char #> lit
  - Parses a number as a token and returns its integer value.
  -}
 number :: Parser Int
-number = token (iterateWhile digit) >-> read
+number = token (iterateWhile digit) #> (\x -> case x of
+    [] -> fail
+    _  -> return $ read x)
 
 {-
  - Parses a word as a token and returns it as a `Var` value.
  -}
 var :: Parser Expr
-var = word >-> Var
+var = word >>- Var
 
 {-
  - Parses a number as a token and returns it as a `Num` value.
  -}
 num :: Parser Expr
-num = number >-> Num
+num = number >>- Num
+
+{-
+ - Parses a multiplication or division operator and returns a Mul or Div value.
+ -}
+mulOp :: Parser (Expr -> Expr -> Expr)
+mulOp = lit '*' >>- (\_ -> Mul)
+      ! lit '/' >>- (\_ -> Div)
+
+{-
+ - Parses an addition or subtraction operator and returns a Add or Sub value.
+ -}
+addOp :: Parser (Expr -> Expr -> Expr)
+addOp = lit '+' >>- (\_ -> Add)
+      ! lit '-' >>- (\_ -> Sub)
+
+{-
+ - Parses a 'factor' and returns an Expr type.
+ -}
+factor :: Parser Expr
+factor = num ! var ! lit '(' -# expr #- lit ')'
+       ! err "Illegal factor"
+
+{-
+ - Builds an op Expr value.
+ -}
+bldOp :: Expr -> (Expr -> Expr -> Expr, Expr) -> Expr
+bldOp e (o, e') = o e e'
+
+{-
+ - Recursive term buider.
+ -}
+term' :: Expr -> Parser Expr
+term' e = (((mulOp # factor) >>- bldOp e) #> term')
+        ! return e
+
+{-
+ - Parses a term and returns an Expr value.
+ -}
+term :: Parser Expr
+term = factor #> term'
+
+{-
+ - Recursive expr buider.
+ -}
+expr' :: Expr -> Parser Expr
+expr' e = (((addOp # term) >>- bldOp e) #> expr')
+        ! return e
+
+{-
+ - Parses an expr and returns an Expr value.
+ -}
+expr :: Parser Expr
+expr = term #> expr'
+
+{-
+ - Requires a string s to be parsed as a token or an error is thrown.
+ -}
+require :: String -> Parser String
+require s = token (iterate char (length s) ? (==s))
+          ! err ("Required string '" ++ s ++ "' not found")
