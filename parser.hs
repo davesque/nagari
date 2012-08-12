@@ -3,51 +3,35 @@ module Parse where
 import Prelude hiding (fail, return, iterate)
 import Data.Char
 
-{-
- - Returns a tuple of its two arguments.
- -}
+-- | Returns a tuple of its two arguments.
 build :: a -> b -> (a, b)
 build x y = (x, y)
 
-{-
- - Applies the cons operator to the members of a double.
- -}
+-- | Applies the cons operator to the members of a double.
 cons :: (a, [a]) -> [a]
 cons (x, xs) = x:xs
 
-{-
- - Language expression type.
- -}
-data Expr =
-    Num Int
-    | Var String
-    | Add Expr Expr
-    | Sub Expr Expr
-    | Mul Expr Expr
-    | Div Expr Expr
-    deriving (Show)
+-- | Language expression type.
+data Expr = Num Int
+          | Var String
+          | Add Expr Expr
+          | Sub Expr Expr
+          | Mul Expr Expr
+          | Div Expr Expr
+          deriving (Show)
 
-{-
- - Language statement type.
- -}
-data Statement =
-    Assignment String Expr
-    deriving (Show)
+-- | Language statement type.
+data Statement = Assignment String Expr
+               deriving (Show)
 
-{-
- - Parser (combinator) type.
- -}
+-- | Parser (combinator) type.
 type Parser a = String -> Maybe (a, String)
 
-{-
- - Prints error message.
- -}
+-- | Prints error message.
 err :: String -> Parser a
 err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
 
-{-
- - Filters the result of a parser `p` with a boolean function `f`.
- -}
+-- | Filters the result of a parser `p` with a boolean function `f`.
 pfilter :: (a -> Bool) -> Parser a -> Parser a
 pfilter f p xs = case p xs of
     Nothing -> Nothing
@@ -55,9 +39,7 @@ pfilter f p xs = case p xs of
 infix 7 ?
 p ? f = pfilter f p
 
-{-
- - Returns the result of an alternative parser `q` if a parser `p` fails.
- -}
+-- | Returns the result of an alternative parser `q` if a parser `p` fails.
 palternative :: Parser a -> Parser a -> Parser a
 palternative p q xs = case p xs of
     Nothing -> q xs
@@ -65,9 +47,7 @@ palternative p q xs = case p xs of
 infixl 3 !
 (!) = palternative
 
-{-
- - Maps a function `f` over the parsed portion of the result of a parser `p`.
- -}
+-- | Maps a function `f` over the parsed portion of the result of a parser `p`.
 pmap :: (a -> b) -> Parser a -> Parser b
 pmap f p xs = case p xs of
     Nothing      -> Nothing
@@ -75,9 +55,8 @@ pmap f p xs = case p xs of
 infixl 5 >>-
 p >>- f = pmap f p
 
-{-
- - Provides the result of a parser `p` to another parser which is returned by a function `f`.
- -}
+-- | Provides the result of a parser `p` to another parser which is returned by
+-- a function `f`.
 pbind :: (a -> Parser b) -> Parser a -> Parser b
 pbind f p xs = case p xs of
     Nothing      -> Nothing
@@ -85,39 +64,29 @@ pbind f p xs = case p xs of
 infix 4 #>
 p #> f = pbind f p
 
-{-
- - Concatenates the results of two parsers `p` and `q` into a tuple.
- -}
+-- | Concatenates the results of two parsers `p` and `q` into a tuple.
 pcat :: Parser a -> Parser b -> Parser (a, b)
-pcat m n = m #> (\x -> n >>- build x)
+pcat p q = p #> (\x -> q >>- build x)
 infixl 6 #
 (#) = pcat
 
-{-
- - Returns the result of the first of two parsers `p` and `q`.
- -}
+-- | Returns the result of the first of two parsers `p` and `q`.
 psnd :: Parser a -> Parser b -> Parser b
-psnd m n = (m # n) >>- snd
+psnd p q = (p # q) >>- snd
 infixl 4 -#
 (-#) = psnd
 
-{-
- - Returns the result of the second of two parsers `p` and `q`.
- -}
+-- | Returns the result of the second of two parsers `p` and `q`.
 pfst :: Parser a -> Parser b -> Parser a
-pfst m n = (m # n) >>- fst
+pfst p q = (p # q) >>- fst
 infixl 4 #-
 (#-) = pfst
 
-{-
- - Always succeeds in parsing a value `x`.
- -}
+-- | Always succeeds in parsing a value `x`.
 return :: a -> Parser a
 return x xs = Just (x, xs)
 
-{-
- - Always fails to parse.
- -}
+-- | Always fails to parse.
 fail :: Parser a
 fail xs = Nothing
 
@@ -126,15 +95,15 @@ fail xs = Nothing
  - array.
  -}
 iterate :: Parser a -> Int -> Parser [a]
-iterate m 0 = return []
-iterate m i = m # iterate m (i-1) >>- cons
+iterate p 0 = return []
+iterate p i = p # iterate p (i-1) >>- cons
 
 {-
- - Parses a string while a parser `m` succeeds and returns all results as an
+ - Parses a string while a parser `p` succeeds and returns all results as an
  - array.
  -}
 iterateWhile :: Parser a -> Parser [a]
-iterateWhile m = m # iterateWhile m >>- cons ! return []
+iterateWhile p = p # iterateWhile p >>- cons ! return []
 
 {-
  - Converts a parser `p` into a parser which will clear any whitespace after
@@ -252,9 +221,9 @@ double = char #> lit
  - Parses a number as a token and returns its integer value.
  -}
 number :: Parser Int
-number = token (iterateWhile digit) #> (\x -> case x of
+number = token (iterateWhile digit) #> \x -> case x of
     [] -> fail
-    _  -> return $ read x)
+    _  -> return $ read x
 
 {-
  - Parses a word as a token and returns it as a `Var` value.
