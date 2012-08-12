@@ -3,14 +3,10 @@ module Parse where
 import Prelude hiding (fail, return, iterate)
 import Data.Char
 
--- | Returns a tuple of its two arguments.
-build :: a -> b -> (a, b)
-build x y = (x, y)
 
--- | Applies the cons operator to the members of a double.
-cons :: (a, [a]) -> [a]
-cons (x, xs) = x:xs
-
+{-
+ - Data types
+ -}
 -- | Language expression type.
 data Expr = Num Int
           | Var String
@@ -27,10 +23,26 @@ data Statement = Assignment String Expr
 -- | Parser (combinator) type.
 type Parser a = String -> Maybe (a, String)
 
+
+{-
+ - Utility functions
+ -}
+-- | Returns a tuple of its two arguments.
+build :: a -> b -> (a, b)
+build x y = (x, y)
+
+-- | Applies the cons operator to the members of a double.
+cons :: (a, [a]) -> [a]
+cons (x, xs) = x:xs
+
 -- | Prints error message.
 err :: String -> Parser a
 err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
 
+
+{-
+ - Operators
+ -}
 -- | Filters the result of a parser `p` with a boolean function `f`.
 pfilter :: (a -> Bool) -> Parser a -> Parser a
 pfilter f p xs = case p xs of
@@ -82,6 +94,10 @@ pfst p q = (p # q) >>- fst
 infixl 4 #-
 (#-) = pfst
 
+
+{-
+ - Core functions
+ -}
 -- | Always succeeds in parsing a value `x`.
 return :: a -> Parser a
 return x xs = Just (x, xs)
@@ -106,6 +122,10 @@ iterateWhile p = p # iterateWhile p >>- cons ! return []
 token :: Parser a -> Parser a
 token p = p #- (iterateWhile space)
 
+
+{-
+ - Parsers
+ -}
 -- | Parses a single char.
 char :: Parser Char
 char "" = Nothing
@@ -202,32 +222,32 @@ addOp :: Parser (Expr -> Expr -> Expr)
 addOp = lit '+' >>- (\_ -> Add)
       ! lit '-' >>- (\_ -> Sub)
 
--- | Parses a 'factor' and returns an Expr type.
-factor :: Parser Expr
-factor = num ! var ! lit '(' -# expr #- lit ')'
-       ! err "Illegal factor"
+-- | Parses a value and returns an Expr type.
+value :: Parser Expr
+value = num ! var ! lit '(' -# addExpr #- lit ')'
+       ! err "Illegal value"
 
--- | Builds an op Expr value.
+-- | Builds an operator Expr value.
 bldOp :: Expr -> (Expr -> Expr -> Expr, Expr) -> Expr
 bldOp e (o, e') = o e e'
 
--- | Recursive term buider.
-term' :: Expr -> Parser Expr
-term' e = (((mulOp # factor) >>- bldOp e) #> term')
+-- | Recursive multiplication expression builder.
+mulExpr' :: Expr -> Parser Expr
+mulExpr' e = ((mulOp # value) >>- bldOp e) #> mulExpr'
         ! return e
 
--- | Parses a term and returns an Expr value.
-term :: Parser Expr
-term = factor #> term'
+-- | Parses a multiplication expression and returns an Expr value.
+mulExpr :: Parser Expr
+mulExpr = value #> mulExpr'
 
--- | Recursive expr buider.
-expr' :: Expr -> Parser Expr
-expr' e = (((addOp # term) >>- bldOp e) #> expr')
+-- | Recursive addition expression buider.
+addExpr' :: Expr -> Parser Expr
+addExpr' e = ((addOp # mulExpr) >>- bldOp e) #> addExpr'
         ! return e
 
--- | Parses an expr and returns an Expr value.
-expr :: Parser Expr
-expr = term #> expr'
+-- | Parses an addition expression and returns an Expr value.
+addExpr :: Parser Expr
+addExpr = mulExpr #> addExpr'
 
 -- | Requires a string s to be parsed as a token or an error is thrown.
 require :: String -> Parser String
