@@ -1,7 +1,8 @@
 module Parse where
 
-import Prelude hiding (fail, return, iterate)
+import Prelude hiding (fail, iterate, lookup)
 import Data.Char
+import Data.Map (Map, lookup, fromList, insert)
 
 
 ----------------
@@ -18,11 +19,12 @@ data Expr = Num Int
           deriving (Show)
 
 -- | Language statement type.
-data Statement = Assignment String Expr
+data Statement = Assignment Expr Expr
                deriving (Show)
 
 -- | Parser (combinator) type.
 type Parser a = String -> Maybe (a, String)
+type Scope    = Map String Expr
 
 
 -----------------------
@@ -104,8 +106,8 @@ psnd p q = (p # q) >>> snd
 --------------------
 
 -- | Always succeeds in parsing a value `x`.
-return :: a -> Parser a
-return x xs = Just (x, xs)
+return' :: a -> Parser a
+return' x xs = Just (x, xs)
 
 -- | Always fails to parse.
 fail :: Parser a
@@ -114,14 +116,14 @@ fail xs = Nothing
 -- | Applies a parser to a string `i` times and concatenates the results into
 -- an array.
 iterate :: Parser a -> Int -> Parser [a]
-iterate p 0 = return []
+iterate p 0 = return' []
 iterate p i = p # iterate p (i-1) >>> cons
 
 -- | Parses a string while a parser `p` succeeds and returns all results as an
 -- array.
 iterateWhile :: Parser a -> Parser [a]
 iterateWhile p = p # iterateWhile p >>> cons
-               ! return []
+               ! return' []
 
 -- | Converts a parser `p` into a parser which will clear any whitespace after
 -- the successfully parsed portion of a string.
@@ -167,8 +169,8 @@ semicolon :: Parser Char
 semicolon = lit ';'
 
 -- | Parses an assignment operator (':=').
-becomes :: Parser (Char, Char)
-becomes = twochars ? (==(':', '='))
+becomes :: Parser Char
+becomes = token $ lit '='
 
 -- | Parses a single digit char and converts it to an integer value.
 digitVal :: Parser Int
@@ -208,7 +210,7 @@ double = char >>- lit
 number :: Parser Int
 number = token (iterateWhile digit) >>- \x -> case x of
     [] -> fail
-    _  -> return $ read x
+    _  -> return' $ read x
 
 -- | Parses a word as a token and returns it as a `Var` value.
 var :: Parser Expr
@@ -221,18 +223,24 @@ num = number >>> Num
 -- | Parses a multiplication or division operator and returns a Mul or Div
 -- value.
 mulOp :: Parser (Expr -> Expr -> Expr)
-mulOp = lit '*' >>> (\_ -> Mul)
-      ! lit '/' >>> (\_ -> Div)
+mulOp = token $
+    lit '*' >>> (\_ -> Mul)
+  ! lit '/' >>> (\_ -> Div)
 
 -- | Parses an addition or subtraction operator and returns a Add or Sub value.
 addOp :: Parser (Expr -> Expr -> Expr)
-addOp = lit '+' >>> (\_ -> Add)
-      ! lit '-' >>> (\_ -> Sub)
+addOp = token $
+    lit '+' >>> (\_ -> Add)
+  ! lit '-' >>> (\_ -> Sub)
 
 -- | Parses a value and returns an Expr type.
 value :: Parser Expr
-value = num ! var ! lit '(' -# addExpr #- lit ')'
-       ! err "Illegal value"
+value = num ! var ! expr
+      ! err "Illegal value"
+
+-- | Parses a whole expression and returns an Expr type.
+expr :: Parser Expr
+expr = token (lit '(') -# token addExpr #- token (lit ')')
 
 -- | Builds an operator Expr value.
 bldOp :: Expr -> (Expr -> Expr -> Expr, Expr) -> Expr
@@ -241,7 +249,7 @@ bldOp e (o, e') = o e e'
 -- | Recursive multiplication expression builder.
 mulExpr' :: Expr -> Parser Expr
 mulExpr' e = ((mulOp # value) >>> bldOp e) >>- mulExpr'
-        ! return e
+           ! return' e
 
 -- | Parses a multiplication expression and returns an Expr value.
 mulExpr :: Parser Expr
@@ -250,7 +258,7 @@ mulExpr = value >>- mulExpr'
 -- | Recursive addition expression buider.
 addExpr' :: Expr -> Parser Expr
 addExpr' e = ((addOp # mulExpr) >>> bldOp e) >>- addExpr'
-        ! return e
+           ! return' e
 
 -- | Parses an addition expression and returns an Expr value.
 addExpr :: Parser Expr
@@ -260,3 +268,68 @@ addExpr = mulExpr >>- addExpr'
 require :: String -> Parser String
 require s = token (iterate char (length s) ? (==s))
           ! err ("Required string '" ++ s ++ "' not found")
+
+-- | Evaluate an Expr value.
+eval :: Scope -> Maybe Expr -> Maybe Int
+eval _ Nothing = Nothing
+eval _ (Just (Num x)) = Just x
+eval s (Just (Var x)) = case lookup x s of
+    Nothing -> error $ "Variable '" ++ x ++ "' not in scope"
+    e       -> eval s e
+eval s (Just (Add x y)) = do
+    a <- eval s (Just x)
+    b <- eval s (Just y)
+    return $ a + b
+eval s (Just (Sub x y)) = do
+    a <- eval s (Just x)
+    b <- eval s (Just y)
+    return $ a - b
+eval s (Just (Mul x y)) = do
+    a <- eval s (Just x)
+    b <- eval s (Just y)
+    return $ a * b
+eval s (Just (Div x y)) = do
+    a <- eval s (Just x)
+    b <- eval s (Just y)
+    return $ a `div` b
+
+-- | Gets the parsed expression portion from an expression parser.
+getExpr :: Maybe (Expr, String) -> Maybe Expr
+getExpr Nothing = Nothing
+getExpr (Just (x, xs)) = Just x
+
+-- | Builds a statement value from a tuple.
+bldStatement :: (Expr, Expr) -> Statement
+bldStatement (x, y) = Assignment x y
+
+-- | Parses a statement and returns a Statement value.
+statement :: Parser Statement
+statement = (var #- becomes) # (addExpr ! value) >>> bldStatement
+
+-- | Executes a statement.
+exec :: Scope -> Maybe Statement -> Scope
+exec s Nothing = s
+exec s (Just (Assignment (Var v) e)) = insert v e s
+
+-- | Gets the parsed statement portion from a statement parser.
+getStatement :: Maybe (Statement, String) -> Maybe Statement
+getStatement Nothing = Nothing
+getStatement (Just (x, xs)) = Just x
+
+-- | Gets the expression portion from a statement.
+getStatementExpr :: Maybe Statement -> Maybe Expr
+getStatementExpr Nothing = Nothing
+getStatementExpr (Just (Assignment v e)) = Just e
+
+----------
+-- Main --
+----------
+
+main = do
+    contents <- readFile "test.calc"
+    let strings    = lines contents
+        statements = map (getStatement . statement) strings
+        scope      = foldl (\a s -> exec a s) (fromList []) statements
+        lastExpr   = getStatementExpr (last statements)
+        final      = eval scope lastExpr
+    putStrLn $ show ((\(Just x) -> x) final)
