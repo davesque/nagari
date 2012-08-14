@@ -24,6 +24,8 @@ data Statement = Assignment Expr Expr
 
 -- | Parser (combinator) type.
 type Parser a = String -> Maybe (a, String)
+
+-- | Map to store variable names in scope.
 type Scope    = Map String Expr
 
 
@@ -269,7 +271,20 @@ require :: String -> Parser String
 require s = token (iterate char (length s) ? (==s))
           ! err ("Required string '" ++ s ++ "' not found")
 
--- | Evaluate an Expr value.
+-- | Builds a statement value from a tuple.
+bldStatement :: (Expr, Expr) -> Statement
+bldStatement (x, y) = Assignment x y
+
+-- | Parses a statement and returns a Statement value.
+statement :: Parser Statement
+statement = (var #- becomes) # (addExpr ! value) >>> bldStatement
+
+
+----------------------------
+-- Evaluation / Execution --
+----------------------------
+
+-- | Evaluates an Expr value.
 eval :: Scope -> Maybe Expr -> Maybe Int
 eval _ Nothing = Nothing
 eval _ (Just (Num x)) = Just x
@@ -298,14 +313,6 @@ getExpr :: Maybe (Expr, String) -> Maybe Expr
 getExpr Nothing = Nothing
 getExpr (Just (x, xs)) = Just x
 
--- | Builds a statement value from a tuple.
-bldStatement :: (Expr, Expr) -> Statement
-bldStatement (x, y) = Assignment x y
-
--- | Parses a statement and returns a Statement value.
-statement :: Parser Statement
-statement = (var #- becomes) # (addExpr ! value) >>> bldStatement
-
 -- | Executes a statement.
 exec :: Scope -> Maybe Statement -> Scope
 exec s Nothing = s
@@ -332,4 +339,4 @@ main = do
         scope      = foldl (\a s -> exec a s) (fromList []) statements
         lastExpr   = getStatementExpr (last statements)
         final      = eval scope lastExpr
-    putStrLn $ show ((\(Just x) -> x) final)
+    putStrLn $ show final
