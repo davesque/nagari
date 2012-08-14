@@ -51,7 +51,7 @@ err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
 infix  5 ?    -- pfilter
 infixl 4 #    -- pcat
 infixl 3 >>>  -- pmap
-infix  3 >>-   -- pbind
+infix  3 >>-  -- pbind
 infixl 2 #-   -- pfst
 infixl 2 -#   -- psnd
 infixl 1 !    -- palternative
