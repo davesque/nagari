@@ -3,7 +3,6 @@ import Data.Map (insert, fromList, lookup)
 
 import Parse
 
-
 ----------------------------
 -- Evaluation / Execution --
 ----------------------------
@@ -51,7 +50,6 @@ getStatement (Just (x, xs)) = Just x
 getStatementExpr :: Maybe Statement -> Maybe Expr
 getStatementExpr Nothing = Nothing
 getStatementExpr (Just (Assignment v e)) = Just e
-
 
 ----------
 -- Main --

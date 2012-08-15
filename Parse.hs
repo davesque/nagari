@@ -1,12 +1,10 @@
 module Parse where
 
 import Prelude hiding (return, iterate)
-
 import Data.Char
 import Data.Map (Map, fromList, insert)
 
 import ParseCore
-
 
 ----------------
 -- Data types --
@@ -27,7 +25,6 @@ data Statement = Assignment Expr Expr
 
 -- | Map to store variable names in scope.
 type Scope    = Map String Expr
-
 
 -------------
 -- Parsers --

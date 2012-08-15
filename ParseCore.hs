@@ -3,14 +3,12 @@ module ParseCore where
 import Prelude hiding (return, fail, iterate)
 import Data.Char
 
-
 ----------------
 -- Data types --
 ----------------
 
 -- | Parser (combinator) type.
 type Parser a = String -> Maybe (a, String)
-
 
 -----------------------
 -- Utility functions --
@@ -27,7 +25,6 @@ cons (x, xs) = x:xs
 -- | Prints error message.
 err :: String -> Parser a
 err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
-
 
 ---------------
 -- Operators --
@@ -85,7 +82,6 @@ psnd :: Parser a -> Parser b -> Parser b
 psnd p q = (p # q) >>> snd
 (-#) = psnd
 
-
 --------------------
 -- Core functions --
 --------------------
@@ -114,7 +110,6 @@ iterateWhile p = p # iterateWhile p >>> cons
 -- the successfully parsed portion of a string.
 token :: Parser a -> Parser a
 token p = p #- iterateWhile space
-
 
 -------------
 -- Parsers --
