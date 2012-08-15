@@ -56,7 +56,7 @@ getStatementExpr (Just (Assignment v e)) = Just e
 ----------
 
 main = do
-    contents <- readFile "test.f"
+    contents <- readFile "test.frn"
     let strings    = lines contents
         statements = map (getStatement . statement) strings
         scope      = foldl (\a s -> exec a s) (fromList []) statements
