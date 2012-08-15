@@ -1,4 +1,4 @@
-module Parse where
+module ParseFern where
 
 import Prelude hiding (return, iterate)
 import Data.Char
@@ -6,9 +6,9 @@ import Data.Map (Map, fromList, insert)
 
 import ParseCore
 
-----------------
--- Data types --
-----------------
+-------------------
+-- Grammar types --
+-------------------
 
 -- | Language expression type.
 data Expr = Num Int
@@ -21,14 +21,15 @@ data Expr = Num Int
 
 -- | Language statement type.
 data Statement = Assignment Expr Expr
+               | Print Expr
                deriving (Show)
 
 -- | Map to store variable names in scope.
 type Scope    = Map String Expr
 
--------------
--- Parsers --
--------------
+---------------------
+-- Grammar parsers --
+---------------------
 
 -- | Parses a word as a token and returns it as a `Var` value.
 var :: Parser Expr

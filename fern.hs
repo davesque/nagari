@@ -1,7 +1,7 @@
 import Prelude hiding (lookup)
 import Data.Map (insert, fromList, lookup)
 
-import Parse
+import ParseFern
 
 ----------------------------
 -- Evaluation / Execution --
@@ -56,7 +56,7 @@ getStatementExpr (Just (Assignment v e)) = Just e
 ----------
 
 main = do
-    contents <- readFile "test.calc"
+    contents <- readFile "test.f"
     let strings    = lines contents
         statements = map (getStatement . statement) strings
         scope      = foldl (\a s -> exec a s) (fromList []) statements

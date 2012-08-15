@@ -82,9 +82,9 @@ psnd :: Parser a -> Parser b -> Parser b
 psnd p q = (p # q) >>> snd
 (-#) = psnd
 
---------------------
--- Core functions --
---------------------
+------------------
+-- Core parsers --
+------------------
 
 -- | Always succeeds in parsing a value `x`.
 return :: a -> Parser a
@@ -93,6 +93,35 @@ return x xs = Just (x, xs)
 -- | Always fails to parse.
 fail :: Parser a
 fail xs = Nothing
+
+-- | Parses a single char.
+char :: Parser Char
+char "" = Nothing
+char (x:xs) = Just (x, xs)
+
+-- | Parses a single digit char.
+digit :: Parser Char
+digit = char ? isDigit
+
+-- | Parses a single whitespace char.
+space :: Parser Char
+space = char ? isSpace
+
+-- | Parses a single alphabetical char.
+letter :: Parser Char
+letter = char ? isAlpha
+
+-- | Parses a single alphanumeric char.
+alphanum :: Parser Char
+alphanum = letter ! digit
+
+-- | Parses a single char `x`.
+lit :: Char -> Parser Char
+lit x = char ? (==x)
+
+---------------------
+-- Complex parsers --
+---------------------
 
 -- | Applies a parser to a string `i` times and concatenates the results into
 -- an array.
@@ -111,62 +140,9 @@ iterateWhile p = p # iterateWhile p >>> cons
 token :: Parser a -> Parser a
 token p = p #- iterateWhile space
 
--------------
--- Parsers --
--------------
-
--- | Parses a single char.
-char :: Parser Char
-char "" = Nothing
-char (x:xs) = Just (x, xs)
-
--- | Parses a single char that is a digit.
-digit :: Parser Char
-digit = char ? isDigit
-
--- | Parses a single char that is whitespace.
-space :: Parser Char
-space = char ? isSpace
-
--- | Parses a single char that is alphabetical.
-letter :: Parser Char
-letter = char ? isAlpha
-
--- | Parses a single char that is alphanumeric.
-alphanum :: Parser Char
-alphanum = letter ! digit
-
--- | Parses a single char `x`.
-lit :: Char -> Parser Char
-lit x = char ? (==x)
-
--- | Parses two chars.
-twochars :: Parser (Char, Char)
-twochars = char # char
-
--- | Parses a semicolon.
-semicolon :: Parser Char
-semicolon = lit ';'
-
 -- | Parses an assignment operator (':=').
 becomes :: Parser Char
 becomes = token $ lit '='
-
--- | Parses a single digit char and converts it to an integer value.
-digitVal :: Parser Int
-digitVal = digit >>> digitToInt
-
--- | Parses a single alphabetical char and converts it to uppercase.
-upcaseLetter :: Parser Char
-upcaseLetter = letter >>> toUpper
-
--- | Returns the second char of two parsed chars.
-sndChar :: Parser Char
-sndChar = twochars >>> snd
-
--- | Returns two parsed chars as a string.
-twochars' :: Parser String
-twochars' = char # char >>> (\(x, y) -> [x, y])
 
 -- | Parses a sequence of letters.
 letters :: Parser String
@@ -175,16 +151,6 @@ letters = letter # iterateWhile letter >>> cons
 -- | Parses a word as a token.
 word :: Parser String
 word = token letters
-
--- | Parses a string s as a token.
-accept :: String -> Parser String
-accept s = token $ iterate char (length s) ? (==s)
-
--- | Parses two chars of the same value.  The `char` parser parses one char,
--- which is then passed to `lit` to create another parser which will accept the
--- same char.
-double :: Parser Char
-double = char >>- lit
 
 -- | Parses a number as a token and returns its integer value.
 number :: Parser Int
