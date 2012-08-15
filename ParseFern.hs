@@ -83,15 +83,11 @@ addExpr' e = ((addOp # mulExpr) >>> bldOp e) >>- addExpr'
 addExpr :: Parser Expr
 addExpr = mulExpr >>- addExpr'
 
--- | Requires a string s to be parsed as a token or an error is thrown.
-require :: String -> Parser String
-require s = token (iterate char (length s) ? (==s))
-          ! err ("Required string '" ++ s ++ "' not found")
-
--- | Builds a statement value from a tuple.
-bldStatement :: (Expr, Expr) -> Statement
-bldStatement (x, y) = Assignment x y
+-- | Parses a string s as a token.
+accept :: String -> Parser String
+accept s = token $ iterate char (length s) ? (==s)
 
 -- | Parses a statement and returns a Statement value.
 statement :: Parser Statement
-statement = (var #- becomes) # (addExpr ! value) >>> bldStatement
+statement = (var #- becomes) # (addExpr ! value) >>> (\(x, y) -> Assignment x y)
+          ! accept "print" -# (addExpr ! value) >>> Print

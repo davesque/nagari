@@ -22,12 +22,13 @@ digitVal = digit >>> digitToInt
 upcaseLetter :: Parser Char
 upcaseLetter = letter >>> toUpper
 
--- | Parses a string s as a token.
-accept :: String -> Parser String
-accept s = token $ iterate char (length s) ? (==s)
-
 -- | Parses two chars of the same value.  The `char` parser parses one char,
 -- which is then passed to `lit` to create another parser which will accept the
 -- same char.
 double :: Parser Char
 double = char >>- lit
+
+-- | Requires a string s to be parsed as a token or an error is thrown.
+require :: String -> Parser String
+require s = token (iterate char (length s) ? (==s))
+          ! err ("Required string '" ++ s ++ "' not found")
