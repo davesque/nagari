@@ -36,10 +36,15 @@ getExpr :: Maybe (Expr, String) -> Maybe Expr
 getExpr Nothing = Nothing
 getExpr (Just (x, xs)) = Just x
 
+-- | Adds an expression from an assignment statement to a scope.
+bldScope :: Scope -> Maybe Statement -> Scope
+bldScope s (Just (Assignment (Var v) e)) = insert v e s
+bldScope s _ = s
+
 -- | Executes a statement.
-exec :: Scope -> Maybe Statement -> Scope
-exec s Nothing = s
-exec s (Just (Assignment (Var v) e)) = insert v e s
+exec :: Scope -> Maybe Statement -> IO ()
+exec s (Just (Print e)) = (putStrLn . show . eval s) $ Just e
+exec s _ = return ()
 
 -- | Gets the parsed statement portion from a statement parser.
 getStatement :: Maybe (Statement, String) -> Maybe Statement
@@ -59,7 +64,5 @@ main = do
     contents <- readFile "test.frn"
     let strings    = lines contents
         statements = map (getStatement . statement) strings
-        scope      = foldl (\a s -> exec a s) (fromList []) statements
-        lastExpr   = getStatementExpr (last statements)
-        final      = eval scope lastExpr
-    putStrLn $ show final
+        scope      = foldl bldScope (fromList []) statements
+    mapM_ (exec scope) statements

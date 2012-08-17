@@ -25,7 +25,7 @@ data Statement = Assignment Expr Expr
                deriving (Show)
 
 -- | Map to store variable names in scope.
-type Scope    = Map String Expr
+type Scope = Map String Expr
 
 ---------------------
 -- Grammar parsers --
@@ -90,4 +90,5 @@ accept s = token $ iterate char (length s) ? (==s)
 -- | Parses a statement and returns a Statement value.
 statement :: Parser Statement
 statement = (var #- becomes) # (addExpr ! value) >>> (\(x, y) -> Assignment x y)
-          ! accept "print" -# (addExpr ! value) >>> Print
+          ! accept "print" -# (addExpr ! value)  >>> Print
+          ! err "Illegal statement"
