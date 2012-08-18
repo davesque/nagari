@@ -30,12 +30,12 @@ err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
 -- Operators --
 ---------------
 
-infix  5 ?    -- pfilter
-infixl 4 #    -- pcat
-infixl 3 >>>  -- pmap
-infix  3 >>-  -- pbind
-infixl 2 #-   -- pfst
-infixl 2 -#   -- psnd
+infix  4 ?    -- pfilter
+infixl 3 #    -- pcat
+infixl 3 #-   -- pfst
+infixl 3 -#   -- psnd
+infixl 2 >>>  -- pmap
+infix  2 >>-  -- pbind
 infixl 1 !    -- palternative
 
 -- | Filters the result of a parser `p` with a boolean function `f`.
@@ -152,8 +152,12 @@ letters = letter # iterateWhile letter >>> cons
 word :: Parser String
 word = token letters
 
--- | Parses a number as a token and returns its integer value.
+-- | Parses a number and returns its integer value.
 number :: Parser Int
-number = token (iterateWhile digit) >>- \x -> case x of
+number = iterateWhile digit >>- \x -> case x of
     [] -> fail
     _  -> return $ read x
+
+-- | Parses a string s.
+accept :: String -> Parser String
+accept s = iterate char (length s) ? (==s)
