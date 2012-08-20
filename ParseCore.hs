@@ -115,9 +115,13 @@ letter = char ? isAlpha
 alphanum :: Parser Char
 alphanum = letter ! digit
 
--- | Parses a single char `x`.
+-- | Parses a single char equal to `x`.
 lit :: Char -> Parser Char
 lit x = char ? (==x)
+
+-- | Parses a single char not equal to `x`.
+unlit :: Char -> Parser Char
+unlit x = char ? (/=x)
 
 ---------------------
 -- Complex parsers --
@@ -158,6 +162,6 @@ number = iterateWhile digit >>- \x -> case x of
     [] -> fail
     _  -> return $ read x
 
--- | Parses a string s.
+-- | Parses a string equal to `s`.
 accept :: String -> Parser String
 accept s = iterate char (length s) ? (==s)
