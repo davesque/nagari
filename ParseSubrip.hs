@@ -71,22 +71,17 @@ seconds = iterate digit 2 #- comma # iterate digit 3
 
 subNumber :: Parser SubIndex
 subNumber = number #- newline
-          ! err "Illegal subrip index number"
 
 subTime :: Parser SubTime
 subTime = twoDigitInt #- colon # twoDigitInt #- colon # seconds
     >>> (\((h, m), s) -> SubTime h m s)
-    ! err "Illegal subrip time stamp"
 
 subRange :: Parser (SubTime, SubTime)
 subRange = subTime #- accept " --> " # subTime #- newline
-    ! err "Illegal subrip time range"
 
 subText :: Parser SubText
 subText = (iterateUntil "\n\n" >>> (++"\n")) #- double
-    ! err "Illegal subrip text"
 
 subEntry :: Parser SubEntry
 subEntry = subNumber # subRange # subText
     >>> (\((ind, (t1, t2)), text) -> SubEntry ind t1 t2 text)
-    ! err "Illegal subrip entry"
