@@ -2,6 +2,7 @@ module ParseCore where
 
 import Prelude hiding (return, fail, iterate)
 import Data.Char
+import Data.List hiding (iterate)
 
 ----------------
 -- Data types --
@@ -123,6 +124,10 @@ lit x = char ? (==x)
 unlit :: Char -> Parser Char
 unlit x = char ? (/=x)
 
+-- | Parses two of the same char.
+double :: Parser Char
+double = char >>- lit
+
 ---------------------
 -- Complex parsers --
 ---------------------
@@ -138,6 +143,19 @@ iterate p i = p # iterate p (i-1) >>> cons
 iterateWhile :: Parser a -> Parser [a]
 iterateWhile p = p # iterateWhile p >>> cons
                ! return []
+
+-- | Finds the index of the first occurrence of a list `a` in a list `b`.
+findIn :: (Eq a) => [a] -> [a] -> Maybe Int
+findIn a [] = Nothing
+findIn [] b = Nothing
+findIn a b = elemIndex True $ map (isPrefixOf a) (tails b)
+
+-- | Parses a string until an occurrence of string `a` is found.  If no
+-- occurrence is found, returns Nothing.
+iterateUntil :: String -> Parser String
+iterateUntil a b = case findIn a b of
+    Nothing -> Nothing
+    Just x  -> Just (splitAt x b)
 
 -- | Converts a parser `p` into a parser which will clear any whitespace after
 -- the successfully parsed portion of a string.

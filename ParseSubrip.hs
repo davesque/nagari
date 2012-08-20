@@ -12,13 +12,13 @@ import ParseCore
 -- Grammar types --
 -------------------
 
-type SubNumber = Int
+type SubIndex = Int
 data SubTime = SubTime { hour :: Int
                        , minute :: Int
                        , second :: Float
                        }
 type SubText = String
-data SubEntry = SubEntry { index :: SubNumber
+data SubEntry = SubEntry { index :: SubIndex
                          , startTime :: SubTime
                          , endTime :: SubTime
                          , text :: SubText
@@ -48,6 +48,9 @@ instance Show SubEntry where
 newline :: Parser Char
 newline = lit '\n'
 
+notNewline :: Parser Char
+notNewline = unlit '\n'
+
 colon :: Parser Char
 colon = lit ':'
 
@@ -57,15 +60,16 @@ comma = lit ','
 twoDigitInt :: Parser Int
 twoDigitInt = iterate digit 2 >>> read
 
--- | Doesn't really need err message since it's only used in function which
--- does have err message.
-seconds :: Parser Float
-seconds = token $
-    iterate digit 2 #- comma # iterate digit 3
-        >>> (\(whole, fractional) ->
-            read $ whole ++ "." ++ fractional)
+nonEmptyLine :: Parser String
+nonEmptyLine = iterateWhile notNewline #- newline
 
-subNumber :: Parser SubNumber
+-- | Doesn't really need err message since only used in function which has err
+-- message.
+seconds :: Parser Float
+seconds = iterate digit 2 #- comma # iterate digit 3
+    >>> (\(whole, fractional) -> read $ whole ++ "." ++ fractional)
+
+subNumber :: Parser SubIndex
 subNumber = number #- newline
           ! err "Illegal subrip index number"
 
@@ -74,5 +78,15 @@ subTime = twoDigitInt #- colon # twoDigitInt #- colon # seconds
     >>> (\((h, m), s) -> SubTime h m s)
     ! err "Illegal subrip time stamp"
 
-subEntry :: Parser ((SubNumber, SubTime), SubTime)
-subEntry = subNumber # subTime #- accept " --> " # subTime #- newline
+subRange :: Parser (SubTime, SubTime)
+subRange = subTime #- accept " --> " # subTime #- newline
+    ! err "Illegal subrip time range"
+
+subText :: Parser SubText
+subText = (iterateUntil "\n\n" >>> (++"\n")) #- double
+    ! err "Illegal subrip text"
+
+subEntry :: Parser SubEntry
+subEntry = subNumber # subRange # subText
+    >>> (\((ind, (t1, t2)), text) -> SubEntry ind t1 t2 text)
+    ! err "Illegal subrip entry"
