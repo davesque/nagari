@@ -8,8 +8,10 @@ import Data.List hiding (iterate)
 -- Data types --
 ----------------
 
--- | Parser (combinator) type.
+-- | Parser result type.
 type ParserResult a = Maybe (a, String)
+
+-- | Parser (combinator) type.
 type Parser a = String -> ParserResult a
 
 -----------------------
@@ -23,6 +25,14 @@ build x y = (x, y)
 -- | Applies the cons operator to the members of a double.
 cons :: (a, [a]) -> [a]
 cons (x, xs) = x:xs
+
+-- | Combines a parser result containing an element and a parser result
+-- containing a list of elements to construct a parser result with a new list.
+-- Used only in iterateWhile.
+cons' :: ParserResult a -> ParserResult [a] -> ParserResult [a]
+cons' Nothing _ = Nothing
+cons' _ Nothing = Nothing
+cons' (Just (a, s1)) (Just (as, s2)) = Just (a:as, s2)
 
 -- | Prints error message.
 err :: String -> Parser a
@@ -140,17 +150,10 @@ iterate p 0 = return []
 iterate p i = p # iterate p (i-1) >>> cons
 
 -- | Parses a string while a parser `p` succeeds and returns all results as an
--- array.
+-- array.  Extremely slow for some reason.
 iterateWhile' :: Parser a -> Parser [a]
 iterateWhile' p = p # iterateWhile' p >>> cons
-               ! return []
-
--- | Combines a parser result containing an element and a parser result
--- containing a list of elements to construct a parser result with a new list.
-cons' :: ParserResult a -> ParserResult [a] -> ParserResult [a]
-cons' Nothing _ = Nothing
-cons' _ Nothing = Nothing
-cons' (Just (a, s1)) (Just (as, s2)) = Just (a:as, s2)
+                ! return []
 
 -- | A faster, less elegant implementation of iterateWhile.
 iterateWhile :: Parser a -> Parser [a]
@@ -162,7 +165,7 @@ iterateWhile p xs = case p xs of
 findIn :: (Eq a) => [a] -> [a] -> Maybe Int
 findIn a [] = Nothing
 findIn [] b = Nothing
-findIn a b = elemIndex True $ map (isPrefixOf a) (tails b)
+findIn a b  = elemIndex True $ map (isPrefixOf a) (tails b)
 
 -- | Parses a string until an occurrence of string `a` is found.  If no
 -- occurrence is found, returns Nothing.
@@ -176,7 +179,7 @@ iterateUntil a b = case findIn a b of
 token :: Parser a -> Parser a
 token p = p #- iterateWhile space
 
--- | Parses an assignment operator (':=').
+-- | Parses an assignment operator ('=').
 becomes :: Parser Char
 becomes = token $ lit '='
 

@@ -48,9 +48,6 @@ instance Show SubEntry where
 newline :: Parser Char
 newline = lit '\n'
 
-notNewline :: Parser Char
-notNewline = unlit '\n'
-
 colon :: Parser Char
 colon = lit ':'
 
@@ -59,9 +56,6 @@ comma = lit ','
 
 twoDigitInt :: Parser Int
 twoDigitInt = iterate digit 2 >>> read
-
-nonEmptyLine :: Parser String
-nonEmptyLine = iterateWhile notNewline #- newline
 
 -- | Doesn't really need err message since only used in function which has err
 -- message.
@@ -75,12 +69,15 @@ subNumber = number #- newline
 subTime :: Parser SubTime
 subTime = twoDigitInt #- colon # twoDigitInt #- colon # seconds
     >>> (\((h, m), s) -> SubTime h m s)
+    ! err "Illegal sub rip time entry"
 
 subRange :: Parser (SubTime, SubTime)
 subRange = subTime #- accept " --> " # subTime #- newline
+         ! err "Illegal sub rip time range"
 
 subText :: Parser SubText
 subText = (iterateUntil "\n\n" >>> (++"\n")) #- double
+        ! err "Illegal sub rip text"
 
 subEntry :: Parser SubEntry
 subEntry = subNumber # subRange # subText
