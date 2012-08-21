@@ -9,7 +9,8 @@ import Data.List hiding (iterate)
 ----------------
 
 -- | Parser (combinator) type.
-type Parser a = String -> Maybe (a, String)
+type ParserResult a = Maybe (a, String)
+type Parser a = String -> ParserResult a
 
 -----------------------
 -- Utility functions --
@@ -140,9 +141,22 @@ iterate p i = p # iterate p (i-1) >>> cons
 
 -- | Parses a string while a parser `p` succeeds and returns all results as an
 -- array.
-iterateWhile :: Parser a -> Parser [a]
-iterateWhile p = p # iterateWhile p >>> cons
+iterateWhile' :: Parser a -> Parser [a]
+iterateWhile' p = p # iterateWhile' p >>> cons
                ! return []
+
+-- | Combines a parser result containing an element and a parser result
+-- containing a list of elements to construct a parser result with a new list.
+cons' :: ParserResult a -> ParserResult [a] -> ParserResult [a]
+cons' Nothing _ = Nothing
+cons' _ Nothing = Nothing
+cons' (Just (a, s1)) (Just (as, s2)) = Just (a:as, s2)
+
+-- | A faster, less elegant implementation of iterateWhile.
+iterateWhile :: Parser a -> Parser [a]
+iterateWhile p xs = case p xs of
+    Nothing      -> Just ([], xs)
+    Just (y, ys) -> cons' (Just (y, ys)) (iterateWhile p ys)
 
 -- | Finds the index of the first occurrence of a list `a` in a list `b`.
 findIn :: (Eq a) => [a] -> [a] -> Maybe Int
