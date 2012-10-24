@@ -84,12 +84,12 @@ pcat :: Parser a -> Parser b -> Parser (a, b)
 pcat p q = p >>- (\x -> q >>> build x)
 (#) = pcat
 
--- | Returns the result of the second of two parsers `p` and `q`.
+-- | Returns the result of the first of two parsers `p` and `q`.
 pfst :: Parser a -> Parser b -> Parser a
 pfst p q = (p # q) >>> fst
 (#-) = pfst
 
--- | Returns the result of the first of two parsers `p` and `q`.
+-- | Returns the result of the second of two parsers `p` and `q`.
 psnd :: Parser a -> Parser b -> Parser b
 psnd p q = (p # q) >>> snd
 (-#) = psnd
