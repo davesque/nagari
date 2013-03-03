@@ -1,0 +1,15 @@
+name:                nagari
+version:             0.1.0.0
+synopsis:            Simple parsing library
+homepage:            https://github.com/davesque/nagari
+license:             MIT
+license-file:        LICENSE
+author:              David Sanders
+maintainer:          davesque@gmail.com
+category:            Language
+build-type:          Simple
+cabal-version:       >=1.8
+
+library
+  exposed-modules:   Nagari
+  build-depends:     base >= 4 && < 5
