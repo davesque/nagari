@@ -1,4 +1,4 @@
-# Nagari
+# nagari
 
 A simple parsing library written in Haskell.
 
