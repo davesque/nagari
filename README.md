@@ -2,6 +2,13 @@
 
 A simple parsing library written in Haskell.
 
+## Acknowledgments
+
+This library is based on the following essay by Lennart Andersson of Lund
+University:
+
+[Parsing with Haskell](http://fileadmin.cs.lth.se/cs/Education/EDAN40/assignment4/parser.pdf)
+
 ## What does nagari mean?
 
 In Sanskrit, the ancient language of South Asian literati, the word "naagara"
