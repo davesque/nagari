@@ -32,7 +32,7 @@ cons (x, xs) = x:xs
 cons' :: ParserResult a -> ParserResult [a] -> ParserResult [a]
 cons' Nothing _ = Nothing
 cons' _ Nothing = Nothing
-cons' (Just (a, s1)) (Just (as, s2)) = Just (a:as, s2)
+cons' (Just (a, _)) (Just (as, s2)) = Just (a:as, s2)
 
 -- | Prints error message.
 err :: String -> Parser a
@@ -54,7 +54,7 @@ infixl 1 !    -- palternative
 pfilter :: (a -> Bool) -> Parser a -> Parser a
 pfilter f p xs = case p xs of
     Nothing -> Nothing
-    r@(Just (y, ys)) -> if f y then r else Nothing
+    r@(Just (y, _)) -> if f y then r else Nothing
 p ? f = pfilter f p
 
 -- | Returns the result of an alternative parser `q` if a parser `p` fails.
@@ -104,7 +104,7 @@ return x xs = Just (x, xs)
 
 -- | Always fails to parse.
 fail :: Parser a
-fail xs = Nothing
+fail _ = Nothing
 
 -- | Parses a single char.
 char :: Parser Char
@@ -146,7 +146,7 @@ double = char >>- lit
 -- | Applies a parser to a string `i` times and concatenates the results into
 -- an array.
 iterate :: Parser a -> Int -> Parser [a]
-iterate p 0 = return []
+iterate _ 0 = return []
 iterate p i = p # iterate p (i-1) >>> cons
 
 -- | Parses a string while a parser `p` succeeds and returns all results as an
@@ -163,8 +163,8 @@ iterateWhile p xs = case p xs of
 
 -- | Finds the index of the first occurrence of a list `a` in a list `b`.
 findIn :: (Eq a) => [a] -> [a] -> Maybe Int
-findIn a [] = Nothing
-findIn [] b = Nothing
+findIn _ [] = Nothing
+findIn [] _ = Nothing
 findIn a b  = elemIndex True $ map (isPrefixOf a) (tails b)
 
 -- | Parses a string until an occurrence of string `a` is found.  If no
