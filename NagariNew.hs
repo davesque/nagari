@@ -58,9 +58,9 @@ instance MonadPlus Parser where
 -- | Succeeds at parsing a single character if the given predicate is true for
 -- the parser result.
 filter :: (Char -> Bool) -> Parser Char
-filter f = Parser $ \xs -> case xs of
+filter p = Parser $ \xs -> case xs of
     []   -> []
-    y:ys -> [(y, ys) | f y]
+    y:ys -> [(y, ys) | p y]
 
 -- | Builds a parser which will apply itself to a string the given number of
 -- times.
