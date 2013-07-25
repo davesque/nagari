@@ -59,6 +59,11 @@ filter p = Parser $ \xs -> case xs of
     []   -> []
     y:ys -> [(y, ys) | p y]
 
+filter' :: (Char -> Bool) -> Parser Char
+filter' p = do
+    x <- char
+    if p x then return x else fail ""
+
 -- | Builds a parser that first attempts to parse with a parser `p` and falls
 -- back to parsing with a parser `q` on failure.
 or :: Parser a -> Parser a -> Parser a
