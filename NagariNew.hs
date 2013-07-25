@@ -83,8 +83,8 @@ takeWhile p = Parser $ \xs -> case xs of
 ------------------
 
 -- | Parses a single character.
-item :: Parser Char
-item = Parser $ \xs -> case xs of
+char :: Parser Char
+char = Parser $ \xs -> case xs of
     []   -> []
     y:ys -> [(y, ys)]
 
