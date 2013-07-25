@@ -72,11 +72,8 @@ take = replicateM
 takeWhile :: (Char -> Bool) -> Parser String
 takeWhile p = Parser $ \xs -> case xs of
     [] -> []
-    _  -> let tw = P.takeWhile p xs
-              dw = P.dropWhile p xs
-          in case tw of
-              [] -> []
-              _  -> [(tw, dw)]
+    _  -> let (xsInit, xsTail) = span p xs
+          in [(xsInit, xsTail) | not . null $ xsInit]
 
 ------------------
 -- Core parsers --
