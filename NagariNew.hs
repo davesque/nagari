@@ -59,11 +59,23 @@ filter p = Parser $ \xs -> case xs of
     []   -> []
     y:ys -> [(y, ys) | p y]
 
-{-or :: Parser a -> Parser b -> Parser c-}
-{-(Parser p) `or` (Parser q) = Parser $ \xs ->-}
-    {-case p xs of-}
-        {-[] -> q xs-}
-        {-r  -> r-}
+-- | Builds a parser that first attempts to parse with a parser `p` and falls
+-- back to parsing with a parser `q` on failure.
+or :: Parser a -> Parser a -> Parser a
+p `or` q = Parser $ \xs -> case runParser p xs of
+    [] -> runParser q xs
+    r  -> r
+
+-- | Builds a parser that first attempts to parse with a parser `p` and falls
+-- back to parsing with a parser `q` on failure.  Parser result type uses
+-- `Either`.
+or' :: Parser a -> Parser b -> Parser (Either b a)
+p `or'` q = Parser $ \xs ->
+    case runParser p xs of
+    [] -> case runParser q xs of
+          [] -> []
+          r2 -> [(Left y, ys) | (y, ys) <- r2]
+    r1 -> [(Right y, ys) | (y, ys) <- r1]
 
 -- | Builds a parser which will apply itself to a string the given number of
 -- times.
