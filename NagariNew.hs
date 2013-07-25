@@ -62,10 +62,26 @@ filter p = Parser $ \xs -> case xs of
     []   -> []
     y:ys -> [(y, ys) | p y]
 
+{-or :: Parser a -> Parser b -> Parser c-}
+{-(Parser p) `or` (Parser q) = Parser $ \xs ->-}
+    {-case p xs of-}
+        {-[] -> q xs-}
+        {-r  -> r-}
+
 -- | Builds a parser which will apply itself to a string the given number of
 -- times.
 take :: Int -> Parser Char -> Parser String
 take = replicateM
+
+{-iterateUntilM :: (Monad m) => (a -> Bool) -> (a -> m a) -> a -> m a-}
+{-iterateUntilM p f v -}
+    {-| p v       = return v-}
+    {-| otherwise = f v >>= iterateUntilM p f-}
+
+{--- |Execute an action repeatedly until its result satisfies a predicate,-}
+{--- and return that result (discarding all others).-}
+{-iterateUntil :: Monad m => (a -> Bool) -> m a -> m a-}
+{-iterateUntil p x = x >>= iterateUntilM p (const x)-}
 
 -- | Builds a parser that will succeed as long as the predicate `p` is true for
 -- characters in the input stream.
