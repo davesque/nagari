@@ -28,6 +28,10 @@ instance Monoid (Parser a) where
             gResult = g xs
         in fResult ++ gResult
 
+instance MonadPlus Parser where
+    mzero = mempty
+    mplus = mappend
+
 instance Functor Parser where
     -- | Allows for mapping over parser results with a function `f`.
     fmap f p = Parser $ \xs ->
@@ -43,10 +47,6 @@ instance Monad Parser where
 
     -- | Always fails at parsing a value.
     fail _ = Parser $ const []
-
-instance MonadPlus Parser where
-    mzero = mempty
-    mplus = mappend
 
 ----------------------
 -- Parsers builders --
