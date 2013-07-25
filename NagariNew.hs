@@ -3,7 +3,7 @@ module NagariNew where
 import Control.Monad
 import Data.Char
 import Data.Monoid
-import Prelude hiding (filter, iterate, takeWhile)
+import Prelude hiding (filter, iterate, take, takeWhile)
 import qualified Prelude as P
 
 ----------------
