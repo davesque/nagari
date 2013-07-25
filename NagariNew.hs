@@ -41,7 +41,7 @@ instance Monad Parser where
 
     -- | Allows for chaining of parsers together.
     Parser p >>= f = Parser $ \xs ->
-        concat [runParser (f v) xs' | (v, xs') <- p xs]
+        concat [runParser (f y) ys | (y, ys) <- p xs]
 
     -- | Always fails at parsing a value.
     fail _ = Parser $ const []
