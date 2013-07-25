@@ -17,7 +17,6 @@ newtype Parser a = Parser { runParser :: String -> [(a, String)] }
 -- Instances --
 ---------------
 
--- | Parser Monoid instance.
 instance Monoid (Parser a) where
     -- | The identity function for another parser when combined with `mappend`.
     mempty = Parser $ const []
@@ -29,24 +28,22 @@ instance Monoid (Parser a) where
             gResult = g xs
         in fResult ++ gResult
 
--- | Parser Functor instance.
 instance Functor Parser where
+    -- | Allows for mapping over parser results with a function `f`.
     fmap f p = Parser $ \xs ->
         [(f y, ys) | (y, ys) <- runParser p xs]
 
--- | Parser Monad instance.
 instance Monad Parser where
     -- | Always succeeds at parsing a value `x`.
     return x = Parser $ \xs -> [(x, xs)]
 
-    -- | Allows for chaining of parsers together.
+    -- | Allows for combination of parsers.
     Parser p >>= f = Parser $ \xs ->
         concat [runParser (f y) ys | (y, ys) <- p xs]
 
     -- | Always fails at parsing a value.
     fail _ = Parser $ const []
 
--- | Parser MonadPlus instance.
 instance MonadPlus Parser where
     mzero = mempty
     mplus = mappend
