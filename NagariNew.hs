@@ -2,8 +2,9 @@ module NagariNew where
 
 import Control.Monad
 import Data.Char
+import qualified Data.List as L
 import Data.Monoid
-import Prelude hiding (filter, iterate, take, takeWhile)
+import Prelude hiding (filter, iterate, take, takeWhile, map)
 import qualified Prelude as P
 
 ----------------
@@ -52,17 +53,9 @@ instance Monad Parser where
 -- Parsers builders --
 ----------------------
 
--- | Succeeds at parsing a single character if the given predicate is true for
--- the parser result.
-filter :: (Char -> Bool) -> Parser Char
-filter p = Parser $ \xs -> case xs of
-    []   -> []
-    y:ys -> [(y, ys) | p y]
-
-filter' :: (Char -> Bool) -> Parser Char
-filter' p = do
-    x <- char
-    if p x then return x else fail ""
+-- | Alias for `mplus`.
+and :: Parser a -> Parser a -> Parser a
+and = mplus
 
 -- | Builds a parser that first attempts to parse with a parser `p` and falls
 -- back to parsing with a parser `q` on failure.
@@ -82,20 +75,26 @@ p `or'` q = Parser $ \xs ->
           r2 -> [(Left y, ys) | (y, ys) <- r2]
     r1 -> [(Right y, ys) | (y, ys) <- r1]
 
+-- | Alias for `fmap`.
+map :: (a -> b) -> Parser a -> Parser b
+map = fmap
+
+-- | Succeeds at parsing a single character if the given predicate is true for
+-- the parser result.
+takeOneIf :: (Char -> Bool) -> Parser Char
+takeOneIf p = Parser $ \xs -> case xs of
+    []   -> []
+    y:ys -> [(y, ys) | p y]
+
+takeOneIf' :: (Char -> Bool) -> Parser Char
+takeOneIf' p = do
+    x <- char
+    if p x then return x else fail ""
+
 -- | Builds a parser which will apply itself to a string the given number of
 -- times.
 take :: Int -> Parser Char -> Parser String
 take = replicateM
-
-{-iterateUntilM :: (Monad m) => (a -> Bool) -> (a -> m a) -> a -> m a-}
-{-iterateUntilM p f v -}
-    {-| p v       = return v-}
-    {-| otherwise = f v >>= iterateUntilM p f-}
-
-{--- |Execute an action repeatedly until its result satisfies a predicate,-}
-{--- and return that result (discarding all others).-}
-{-iterateUntil :: Monad m => (a -> Bool) -> m a -> m a-}
-{-iterateUntil p x = x >>= iterateUntilM p (const x)-}
 
 -- | Builds a parser that will succeed as long as the predicate `p` is true for
 -- characters in the input stream.
@@ -104,6 +103,49 @@ takeWhile p = Parser $ \xs -> case xs of
     [] -> []
     _  -> let (xsInit, xsTail) = span p xs
           in [(xsInit, xsTail) | not . null $ xsInit]
+
+-- | Finds the index of the first occurrence of a list `xs` in a list `ys`.
+findIn :: (Eq a) => [a] -> [a] -> Maybe Int
+findIn _ []  = Nothing
+findIn [] _  = Nothing
+findIn xs ys = L.elemIndex True $ L.map (L.isPrefixOf xs) (L.tails ys)
+
+-- | Builds a parser which parses a string until an occurrence of string `s` is
+-- found.  Fails if nothing is found.
+takeUntil :: String -> Parser String
+takeUntil s = Parser $ \xs -> case findIn s xs of
+    Nothing -> []
+    Just i  -> [splitAt i xs]
+
+-- | Builds a parser which performs its action and then consumes any whitespace
+-- after the parsed content.
+token :: Parser a -> Parser a
+token p = do
+    x <- p
+    takeWhile isSpace
+    return x
+
+-- | Parses a tokenized '=' sign.
+becomes :: Parser Char
+becomes = token $ lit '='
+
+-- | Parses a sequence of letters.
+letters :: Parser String
+letters = takeWhile isAlpha
+
+-- | Parses a tokenized sequence of letters.
+word :: Parser String
+word = token letters
+
+-- | Parses a sequence of digits and returns its integer value.
+number :: Parser Integer
+number = map read $ takeWhile isDigit
+
+-- | Parses a specific string from the input.
+accept :: String -> Parser String
+accept s = do
+    t <- take (length s) char
+    if s == t then return t else fail ""
 
 ------------------
 -- Core parsers --
@@ -117,24 +159,24 @@ char = Parser $ \xs -> case xs of
 
 -- | Parses a single whitespace character.
 space :: Parser Char
-space = filter isSpace
+space = takeOneIf isSpace
 
 -- | Parses a single alphabetical character.
 alpha :: Parser Char
-alpha = filter isAlpha
+alpha = takeOneIf isAlpha
 
 -- | Parses a single digit character.
 digit :: Parser Char
-digit = filter isDigit
+digit = takeOneIf isDigit
 
 -- | Parses a single alpha-numerical character.
 alphaNum :: Parser Char
-alphaNum = filter isAlphaNum
+alphaNum = takeOneIf isAlphaNum
 
 -- | Parses one of a given character `x`.
 lit :: Char -> Parser Char
-lit x = filter (==x)
+lit x = takeOneIf (==x)
 
 -- | Succeeds at parsing a character which is not the given character `x`.
 unLit :: Char -> Parser Char
-unLit x = filter (/=x)
+unLit x = takeOneIf (/=x)
