@@ -1,4 +1,4 @@
-module NagariNew where
+module Nagari where
 
 import Control.Monad
 import Data.Char
