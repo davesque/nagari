@@ -1,241 +1,182 @@
 module Nagari where
 
-import Prelude hiding (return, fail, iterate)
+import Control.Monad
 import Data.Char
-import Data.List hiding (iterate)
+import qualified Data.List as L
+import Data.Monoid
+import Prelude hiding (filter, iterate, take, takeWhile, map)
+import qualified Prelude as P
 
 ----------------
 -- Data types --
 ----------------
 
--- | Parser result type.
-type ParserResult a = Maybe (a, String)
-
--- | Parser (combinator) type.
-type Parser a = String -> ParserResult a
-
------------------------
--- Utility functions --
------------------------
-
--- | Returns a tuple of its two arguments.
-build :: a -> b -> (a, b)
-build x y = (x, y)
-
--- | Applies the cons operator to the members of a double.
-cons :: (a, [a]) -> [a]
-cons (x, xs) = x:xs
-
--- | Combines a parser result containing an element and a parser result
--- containing a list of elements to construct a parser result with a new list.
--- Used only in iterateWhile.
-cons' :: ParserResult a -> ParserResult [a] -> ParserResult [a]
-cons' Nothing _ = Nothing
-cons' _ Nothing = Nothing
-cons' (Just (a, _)) (Just (as, s2)) = Just (a:as, s2)
-
--- | Prints error message.
-err :: String -> Parser a
-err m cs = error $ m ++ " near '" ++ cs ++ "'\n"
+-- | Parser combinator type.
+newtype Parser a = Parser { runParser :: String -> [(a, String)] }
 
 ---------------
--- Operators --
+-- Instances --
 ---------------
 
-infix  4 ?    -- pfilter
-infixl 3 #    -- pcat
-infixl 3 #-   -- pfst
-infixl 3 -#   -- psnd
-infixl 2 >>>  -- pmap
-infix  2 >>-  -- pbind
-infixl 1 !    -- palternative
+instance Monoid (Parser a) where
+    -- | The identity function for another parser when combined with `mappend`.
+    mempty = Parser $ const []
 
--- | Filters the result of a parser `p` with a boolean function `f`.
-pfilter :: (a -> Bool) -> Parser a -> Parser a
-pfilter f p xs = case p xs of
-    Nothing -> Nothing
-    r@(Just (y, _)) -> if f y then r else Nothing
-p ? f = pfilter f p
+    -- | Allows forking of parsing logic, concatenating the results of several
+    -- parsers into one parser result.
+    (Parser f) `mappend` (Parser g) = Parser $ \xs ->
+        let fResult = f xs
+            gResult = g xs
+        in fResult ++ gResult
 
--- | Returns the result of an alternative parser `q` if a parser `p` fails.
-palternative :: Parser a -> Parser a -> Parser a
-palternative p q xs = case p xs of
-    Nothing -> q xs
-    _       -> p xs
-(!) = palternative
+instance MonadPlus Parser where
+    mzero = mempty
+    mplus = mappend
 
--- | Maps a function `f` over the parsed portion of the result of a parser `p`.
-pmap :: (a -> b) -> Parser a -> Parser b
-pmap f p xs = case p xs of
-    Nothing      -> Nothing
-    Just (y, ys) -> Just (f y, ys)
-p >>> f = pmap f p
+instance Functor Parser where
+    -- | Allows for mapping over parser results with a function `f`.
+    fmap f p = Parser $ \xs ->
+        [(f y, ys) | (y, ys) <- runParser p xs]
 
--- | Provides the result of a parser `p` to another parser which is returned by
--- a function `f`.
-pbind :: (a -> Parser b) -> Parser a -> Parser b
-pbind f p xs = case p xs of
-    Nothing      -> Nothing
-    Just (y, ys) -> f y ys
-p >>- f = pbind f p
+instance Monad Parser where
+    -- | Always succeeds at parsing a value `x`.
+    return x = Parser $ \xs -> [(x, xs)]
 
--- | Concatenates the results of two parsers `p` and `q` into a tuple.
-pcat :: Parser a -> Parser b -> Parser (a, b)
-pcat p q = p >>- (\x -> q >>> build x)
-(#) = pcat
+    -- | Allows for combination of parsers.
+    Parser p >>= f = Parser $ \xs ->
+        concat [runParser (f y) ys | (y, ys) <- p xs]
 
--- | Returns the result of the first of two parsers `p` and `q`.
-pfst :: Parser a -> Parser b -> Parser a
-pfst p q = (p # q) >>> fst
-(#-) = pfst
+    -- | Always fails at parsing a value.
+    fail _ = Parser $ const []
 
--- | Returns the result of the second of two parsers `p` and `q`.
-psnd :: Parser a -> Parser b -> Parser b
-psnd p q = (p # q) >>> snd
-(-#) = psnd
+----------------------
+-- Parsers builders --
+----------------------
 
-------------------
--- Core parsers --
-------------------
+-- | Alias for `mplus`.
+and :: Parser a -> Parser a -> Parser a
+and = mplus
 
--- | Always succeeds in parsing a value `x`.
-return :: a -> Parser a
-return x xs = Just (x, xs)
+-- | Builds a parser that first attempts to parse with a parser `p` and falls
+-- back to parsing with a parser `q` on failure.
+or :: Parser a -> Parser a -> Parser a
+p `or` q = Parser $ \xs -> case runParser p xs of
+    [] -> runParser q xs
+    r  -> r
 
--- | Always fails to parse.
-fail :: Parser a
-fail _ = Nothing
+-- | Builds a parser that first attempts to parse with a parser `p` and falls
+-- back to parsing with a parser `q` on failure.  Parser result type uses
+-- `Either`.
+or' :: Parser a -> Parser b -> Parser (Either b a)
+p `or'` q = Parser $ \xs ->
+    case runParser p xs of
+    [] -> case runParser q xs of
+          [] -> []
+          r2 -> [(Left y, ys) | (y, ys) <- r2]
+    r1 -> [(Right y, ys) | (y, ys) <- r1]
 
--- | Parses a single char.
-char :: Parser Char
-char "" = Nothing
-char (x:xs) = Just (x, xs)
+-- | Alias for `fmap`.
+map :: (a -> b) -> Parser a -> Parser b
+map = fmap
 
--- | Parses a single digit char.
-digit :: Parser Char
-digit = char ? isDigit
+-- | Succeeds at parsing a single character if the given predicate is true for
+-- the parser result.
+takeOneIf :: (Char -> Bool) -> Parser Char
+takeOneIf p = Parser $ \xs -> case xs of
+    []   -> []
+    y:ys -> [(y, ys) | p y]
 
--- | Parses a single whitespace char.
-space :: Parser Char
-space = char ? isSpace
+takeOneIf' :: (Char -> Bool) -> Parser Char
+takeOneIf' p = do
+    x <- char
+    if p x then return x else fail ""
 
--- | Parses a single alphabetical char.
-letter :: Parser Char
-letter = char ? isAlpha
+-- | Builds a parser which will apply itself to a string the given number of
+-- times.
+take :: Int -> Parser Char -> Parser String
+take = replicateM
 
--- | Parses a single alphanumeric char.
-alphanum :: Parser Char
-alphanum = letter ! digit
+-- | Builds a parser that will succeed as long as the predicate `p` is true for
+-- characters in the input stream.
+takeWhile :: (Char -> Bool) -> Parser String
+takeWhile p = Parser $ \xs -> case xs of
+    [] -> []
+    _  -> let (xsInit, xsTail) = span p xs
+          in [(xsInit, xsTail) | not . null $ xsInit]
 
--- | Parses a single char equal to `x`.
-lit :: Char -> Parser Char
-lit x = char ? (==x)
-
--- | Parses a single char not equal to `x`.
-unlit :: Char -> Parser Char
-unlit x = char ? (/=x)
-
--- | Parses two of the same char.
-double :: Parser Char
-double = char >>- lit
-
----------------------
--- Complex parsers --
----------------------
-
--- | Applies a parser to a string `i` times and concatenates the results into
--- an array.
-iterate :: Parser a -> Int -> Parser [a]
-iterate _ 0 = return []
-iterate p i = p # iterate p (i-1) >>> cons
-
--- | Parses a string while a parser `p` succeeds and returns all results as an
--- array.  Extremely slow for some reason.
-iterateWhile' :: Parser a -> Parser [a]
-iterateWhile' p = p # iterateWhile' p >>> cons
-                ! return []
-
--- | A faster, less elegant implementation of iterateWhile.
-iterateWhile :: Parser a -> Parser [a]
-iterateWhile p xs = case p xs of
-    Nothing      -> Just ([], xs)
-    Just (y, ys) -> cons' (Just (y, ys)) (iterateWhile p ys)
-
--- | Finds the index of the first occurrence of a list `a` in a list `b`.
+-- | Finds the index of the first occurrence of a list `xs` in a list `ys`.
 findIn :: (Eq a) => [a] -> [a] -> Maybe Int
-findIn _ [] = Nothing
-findIn [] _ = Nothing
-findIn a b  = elemIndex True $ map (isPrefixOf a) (tails b)
+findIn _ []  = Nothing
+findIn [] _  = Nothing
+findIn xs ys = L.elemIndex True $ L.map (L.isPrefixOf xs) (L.tails ys)
 
--- | Parses a string until an occurrence of string `a` is found.  If no
--- occurrence is found, returns Nothing.
-iterateUntil :: String -> Parser String
-iterateUntil a b = case findIn a b of
-    Nothing -> Nothing
-    Just x  -> Just (splitAt x b)
+-- | Builds a parser which parses a string until an occurrence of string `s` is
+-- found.  Fails if nothing is found.
+takeUntil :: String -> Parser String
+takeUntil s = Parser $ \xs -> case findIn s xs of
+    Nothing -> []
+    Just i  -> [splitAt i xs]
 
--- | Converts a parser `p` into a parser which will clear any whitespace after
--- the successfully parsed portion of a string.
+-- | Builds a parser which performs its action and then consumes any whitespace
+-- after the parsed content.
 token :: Parser a -> Parser a
-token p = p #- iterateWhile space
+token p = do
+    x <- p
+    takeWhile isSpace
+    return x
 
--- | Parses an assignment operator ('=').
+-- | Parses a tokenized '=' sign.
 becomes :: Parser Char
 becomes = token $ lit '='
 
 -- | Parses a sequence of letters.
 letters :: Parser String
-letters = letter # iterateWhile letter >>> cons
+letters = takeWhile isAlpha
 
--- | Parses a word as a token.
+-- | Parses a tokenized sequence of letters.
 word :: Parser String
 word = token letters
 
--- | Parses a number and returns its integer value.
-number :: Parser Int
-number = iterateWhile digit >>- \x -> case x of
-    [] -> fail
-    _  -> return $ read x
+-- | Parses a sequence of digits and returns its integer value.
+number :: Parser Integer
+number = map read $ takeWhile isDigit
 
--- | Parses a string equal to `s`.
+-- | Parses a specific string from the input.
 accept :: String -> Parser String
-accept s = iterate char (length s) ? (==s)
+accept s = do
+    t <- take (length s) char
+    if s == t then return t else fail ""
 
------------------
--- Old parsers --
------------------
+------------------
+-- Core parsers --
+------------------
 
-{--- | Parses two chars.-}
-{-twochars :: Parser (Char, Char)-}
-{-twochars = char # char-}
+-- | Parses a single character.
+char :: Parser Char
+char = Parser $ \xs -> case xs of
+    []   -> []
+    y:ys -> [(y, ys)]
 
-{--- | Returns the second char of two parsed chars.-}
-{-sndChar :: Parser Char-}
-{-sndChar = twochars >>> snd-}
+-- | Parses a single whitespace character.
+space :: Parser Char
+space = takeOneIf isSpace
 
-{--- | Returns two parsed chars as a string.-}
-{-twochars' :: Parser String-}
-{-twochars' = char # char >>> (\(x, y) -> [x, y])-}
+-- | Parses a single alphabetical character.
+alpha :: Parser Char
+alpha = takeOneIf isAlpha
 
-{--- | Parses a semicolon.-}
-{-semicolon :: Parser Char-}
-{-semicolon = lit ';'-}
+-- | Parses a single digit character.
+digit :: Parser Char
+digit = takeOneIf isDigit
 
-{--- | Parses a single digit char and converts it to an integer value.-}
-{-digitVal :: Parser Int-}
-{-digitVal = digit >>> digitToInt-}
+-- | Parses a single alpha-numerical character.
+alphaNum :: Parser Char
+alphaNum = takeOneIf isAlphaNum
 
-{--- | Parses a single alphabetical char and converts it to uppercase.-}
-{-upcaseLetter :: Parser Char-}
-{-upcaseLetter = letter >>> toUpper-}
+-- | Parses one of a given character `x`.
+lit :: Char -> Parser Char
+lit x = takeOneIf (==x)
 
-{--- | Parses two chars of the same value.  The `char` parser parses one char,-}
-{--- which is then passed to `lit` to create another parser which will accept the-}
-{--- same char.-}
-{-double :: Parser Char-}
-{-double = char >>- lit-}
-
-{--- | Requires a string s to be parsed as a token or an error is thrown.-}
-{-require :: String -> Parser String-}
-{-require s = token (iterate char (length s) ? (==s))-}
-          {-! err ("Required string '" ++ s ++ "' not found")-}
+-- | Succeeds at parsing a character which is not the given character `x`.
+unLit :: Char -> Parser Char
+unLit x = takeOneIf (/=x)
