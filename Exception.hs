@@ -44,8 +44,30 @@ throwT = ExceptionT . return . Exception
 -- exceptional state has been handled.  Any exceptional states will become
 -- visible if the `Exception` data constructor is pattern matched in the case
 -- statement.
-catchT :: (Monad m) => ExceptionT e m a -> (e -> ExceptionT e m a) -> ExceptionT e m a
+catchT :: (Monad m) =>
+    ExceptionT e m a ->
+    (e -> ExceptionT e m a) ->
+    ExceptionT e m a
+
 catchT (ExceptionT m) f = ExceptionT $
     m >>= \x -> case x of
         Success r   -> return $ Success r
         Exception l -> runExceptionT $ f l
+
+
+-- | Must explain this.  `h` stands for handle value?  What are some examples
+-- of using this for things other than the IO monad?  Open yields the handle
+-- value.  Close does something with the handle value and yields nothing.  Body
+-- does something with the handle value and yields the result of the bracket
+-- function.
+bracketT :: Monad m =>
+    ExceptionT e m h ->
+    (h -> ExceptionT e m ()) ->
+    (h -> ExceptionT e m a) ->
+    ExceptionT e m a
+
+bracketT open close body =
+    open >>= \h -> ExceptionT $ do
+        a <- runExceptionT (body h)
+        runExceptionT (close h)
+        return a
