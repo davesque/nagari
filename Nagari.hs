@@ -53,6 +53,9 @@ instance Monad Parser where
 -- Parsers builders --
 ----------------------
 
+err :: String -> Parser a
+err xs = Parser $ \ys -> error $ xs ++ " near '" ++ ys ++ "'\n"
+
 -- | Alias for `mplus`.
 and :: Parser a -> Parser a -> Parser a
 and = mplus
