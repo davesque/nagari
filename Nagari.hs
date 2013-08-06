@@ -99,6 +99,21 @@ takeOneIf' p = do
 take :: Int -> Parser a -> Parser [a]
 take = replicateM
 
+-- | Used as helper function by `takeAll`.
+takeAll' :: Parser a -> Parser a
+takeAll' p = Parser $ \xs ->
+    let rs = runParser p xs
+    in  rs ++ concat [runParser (takeAll' p) ys | (_, ys) <- rs]
+
+-- | Builds a parser which will apply itself to a string until further
+-- applications yield no results.
+takeAll :: Parser a -> Parser [a]
+takeAll p = Parser $ \xs -> case runParser (takeAll' p) xs of
+    [] -> []
+    rs -> let unParsed = snd . last $ rs
+              results  = P.map fst rs
+          in [(results, unParsed)]
+
 -- | Builds a parser that will succeed as long as the predicate `p` is true for
 -- characters in the input stream.
 takeWhile :: (Char -> Bool) -> Parser String
