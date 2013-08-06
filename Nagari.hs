@@ -137,7 +137,7 @@ word :: Parser String
 word = token letters
 
 -- | Parses a sequence of digits and returns its integer value.
-number :: Parser Integer
+number :: Parser Int
 number = map read $ takeWhile isDigit
 
 -- | Parses a specific string from the input.
