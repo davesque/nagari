@@ -125,10 +125,6 @@ token p = do
     takeWhile isSpace
     return x
 
--- | Parses a tokenized '=' sign.
-becomes :: Parser Char
-becomes = token $ lit '='
-
 -- | Parses a sequence of letters.
 letters :: Parser String
 letters = takeWhile isAlpha
