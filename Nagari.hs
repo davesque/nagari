@@ -96,7 +96,7 @@ takeOneIf' p = do
 
 -- | Builds a parser which will apply itself to a string the given number of
 -- times.
-take :: Int -> Parser Char -> Parser String
+take :: Int -> Parser a -> Parser [a]
 take = replicateM
 
 -- | Builds a parser that will succeed as long as the predicate `p` is true for
