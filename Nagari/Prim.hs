@@ -4,6 +4,7 @@ import Control.Monad
 import Data.Char
 import Data.Monoid
 import Prelude hiding (take, takeWhile, map)
+import qualified Prelude as P
 
 import Nagari.Parser
 import Nagari.State
@@ -21,16 +22,22 @@ char = Parser $ \s -> case input s of
             in (Just x, posModifier s { input = xs })
 
 -- | Looks ahead one character in the input.
-lookAhead :: Parser Char
-lookAhead = Parser $ \s -> case input s of
+lookChar :: Parser Char
+lookChar = Parser $ \s -> case input s of
     []  -> (Nothing, s)
     y:_ -> (Just y, s)
+
+-- | Looks ahead `n` characters in the input.
+look :: Int -> Parser String
+look n = Parser $ \s -> case P.take n $ input s of
+    []  -> (Nothing, s)
+    inp -> (Just inp, s)
 
 -- | Succeeds at parsing a single character if the given predicate is true for
 -- the parser result.
 charIf :: (Char -> Bool) -> Parser Char
 charIf p = do
-    x <- lookAhead
+    x <- lookChar
     if p x then char else emptyOk
 
 -- | Parses a single whitespace character.
@@ -50,12 +57,24 @@ alphaNum :: Parser Char
 alphaNum = charIf isAlphaNum
 
 -- | Parses one of a given character `x`.
-lit :: Char -> Parser Char
-lit x = charIf (==x)
+litChar :: Char -> Parser Char
+litChar x = charIf (==x)
 
 -- | Succeeds at parsing a character which is not the given character `x`.
-unLit :: Char -> Parser Char
-unLit x = charIf (/=x)
+unLitChar :: Char -> Parser Char
+unLitChar x = charIf (/=x)
+
+-- | Succeds at parsing any char in the given string.
+accept :: String -> Parser Char
+accept s = do
+    x <- char
+    if x `elem` s then return x else emptyOk
+
+-- | Succeds at parsing any char which is not in the given string.
+reject :: String -> Parser Char
+reject s = do
+    x <- char
+    if x `notElem` s then return x else emptyOk
 
 ----------------------
 -- Parsers builders --
@@ -114,8 +133,8 @@ takeUntil str = Parser $ \s ->
 
 -- | Builds a parser which performs its action and then consumes any whitespace
 -- after the parsed content.
-token :: Parser a -> Parser a
-token p = do
+spaceDelim :: Parser a -> Parser a
+spaceDelim p = do
     x <- p
     takeWhile isSpace
     return x
@@ -126,14 +145,21 @@ letters = takeWhile isAlpha
 
 -- | Parses a tokenized sequence of letters.
 word :: Parser String
-word = token letters
+word = spaceDelim letters
 
 -- | Parses a sequence of digits and returns its integer value.
 number :: Parser Int
 number = map read $ takeWhile isDigit
 
 -- | Parses a specific string from the input.
-accept :: String -> Parser String
-accept s = do
+litString :: String -> Parser String
+litString s = do
     t <- take (length s) char
     if s == t then return t else emptyOk
+
+-- | Returns a parser that adds an error message `msg` to the parser result
+-- upon failure.
+require :: Parser a -> String -> Parser a
+require p msg = Parser $ \s -> case runParser p s of
+    (Nothing, _) -> (Nothing, addError msg s)
+    r            -> r
