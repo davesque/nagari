@@ -1,5 +1,4 @@
-module Nagari.Utils
-    ( findIn ) where
+module Nagari.Utils where
 
 import Data.List
 
