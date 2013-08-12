@@ -32,13 +32,11 @@ emptyErr msg = Parser $ \s -> (Nothing, addError msg s)
 -- Instances --
 ---------------
 
-instance Monad Parser where
-    return = consumeOk
-
-    Parser p >>= f = Parser $ \s ->
-        let (x, s') = p s
-        in case x of Just x' -> runParser (f x') s'
-                     Nothing -> (Nothing, s')
+instance Functor Parser where
+    -- | Allows modification of the result of a parser `p` by application of a
+    -- function `f`.
+    fmap f p = Parser $ \s ->
+        let (x, s') = runParser p s in (fmap f x, s')
 
 instance Monoid (Parser a) where
     mempty = emptyOk
@@ -50,12 +48,14 @@ instance Monoid (Parser a) where
             (Nothing, _) -> runParser q s
             r            -> r
 
+instance Monad Parser where
+    return = consumeOk
+
+    Parser p >>= f = Parser $ \s ->
+        let (x, s') = p s
+        in case x of Just x' -> runParser (f x') s'
+                     Nothing -> (Nothing, s')
+
 instance MonadPlus Parser where
     mzero = mempty
     mplus = mappend
-
-instance Functor Parser where
-    -- | Allows modification of the result of a parser `p` by application of a
-    -- function `f`.
-    fmap f p = Parser $ \s ->
-        let (x, s') = runParser p s in (fmap f x, s')
