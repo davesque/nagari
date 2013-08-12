@@ -16,22 +16,22 @@ newtype Parser a = Parser { runParser :: State -> Result a }
 instance Monad Parser where
     return = consumeOk
 
-    Parser p >>= f = Parser $ \ps ->
-        let (x, ps') = p ps
-        in case x of Just x' -> runParser (f x') ps'
-                     Nothing -> (Nothing, ps')
+    Parser p >>= f = Parser $ \s ->
+        let (x, s') = p s
+        in case x of Just x' -> runParser (f x') s'
+                     Nothing -> (Nothing, s')
 
 consumeOk :: a -> Parser a
-consumeOk x = Parser $ \ps -> (Just x, ps)
+consumeOk x = Parser $ \s -> (Just x, s)
 
 consumeErr :: a -> String -> Parser a
-consumeErr x msg = Parser $ \ps -> (Just x, addError msg ps)
+consumeErr x msg = Parser $ \s -> (Just x, addError msg s)
 
 emptyOk :: Parser a
-emptyOk = Parser $ \ps -> (Nothing, ps)
+emptyOk = Parser $ \s -> (Nothing, s)
 
 emptyErr :: String -> Parser a
-emptyErr msg = Parser $ \ps -> (Nothing, addError msg ps)
+emptyErr msg = Parser $ \s -> (Nothing, addError msg s)
 
 ---------------
 -- Instances --
@@ -43,9 +43,9 @@ instance Monoid (Parser a) where
 
     -- | Allows running of an alternative parser if the first parser fails
     -- parsers into one parser result.
-    p `mappend` q = Parser $ \ps ->
-        case runParser p ps of
-            (Nothing, _) -> runParser q ps
+    p `mappend` q = Parser $ \s ->
+        case runParser p s of
+            (Nothing, _) -> runParser q s
             r            -> r
 
 instance MonadPlus Parser where
@@ -54,8 +54,8 @@ instance MonadPlus Parser where
 
 instance Functor Parser where
     -- | Allows for mapping over parser results with a function `f`.
-    fmap f p = Parser $ \ps ->
-        let (x, ps') = runParser p ps in (fmap f x, ps')
+    fmap f p = Parser $ \s ->
+        let (x, s') = runParser p s in (fmap f x, s')
 
 ------------------
 -- Core parsers --
@@ -63,16 +63,16 @@ instance Functor Parser where
 
 -- | Parses one character from the input stream.
 char :: Parser Char
-char = Parser $ \ps -> case input ps of
-    []   -> (Nothing, ps)
+char = Parser $ \s -> case input s of
+    []   -> (Nothing, s)
     x:xs -> let posModifier = if x == '\n' then incLine else incCol
-            in (Just x, posModifier ps { input = xs })
+            in (Just x, posModifier s { input = xs })
 
 -- | Looks ahead one character in the input stream.
 lookAhead :: Parser Char
-lookAhead = Parser $ \ps -> case input ps of
-    []  -> (Nothing, ps)
-    y:_ -> (Just y, ps)
+lookAhead = Parser $ \s -> case input s of
+    []  -> (Nothing, s)
+    y:_ -> (Just y, s)
 
 -- | Succeeds at parsing a single character if the given predicate is true for
 -- the parser result.
@@ -141,14 +141,14 @@ take = replicateM
 -- | Builds a parser that will succeed as long as the predicate `p` is true for
 -- characters in the input stream.
 takeWhile :: (Char -> Bool) -> Parser String
-takeWhile p = Parser $ \ps ->
-    let xs = input ps
+takeWhile p = Parser $ \s ->
+    let xs = input s
     in case xs of
-        [] -> (Nothing, ps)
+        [] -> (Nothing, s)
         _  -> let (xsInit, xsTail) = span p xs
               in if null xsInit
-                 then (Nothing, ps)
-                 else (Just xsInit, ps { input = xsTail })
+                 then (Nothing, s)
+                 else (Just xsInit, s { input = xsTail })
 
 -- | Finds the index of the first occurrence of a list `xs` in a list `ys`.
 findIn :: (Eq a) => [a] -> [a] -> Maybe Int
@@ -156,15 +156,15 @@ findIn _ []  = Nothing
 findIn [] _  = Nothing
 findIn xs ys = L.elemIndex True $ L.map (L.isPrefixOf xs) (L.tails ys)
 
--- | Builds a parser which parses a string until an occurrence of string `s` is
+-- | Builds a parser which parses a string until an occurrence of string `str` is
 -- found.  Fails if nothing is found.
 takeUntil :: String -> Parser String
-takeUntil s = Parser $ \ps ->
-    let xs = input ps
-    in case findIn s xs of
-        Nothing -> (Nothing, ps)
-        Just i  -> let (xsInit, xsTail) = splitAt i xs
-                   in (Just xsInit, ps { input = xsTail })
+takeUntil str = Parser $ \s ->
+    let inp = input s
+    in case findIn str inp of
+        Nothing -> (Nothing, s)
+        Just i  -> let (xsInit, xsTail) = splitAt i inp
+                   in (Just xsInit, s { input = xsTail })
 
 -- | Builds a parser which performs its action and then consumes any whitespace
 -- after the parsed content.
