@@ -11,20 +11,20 @@ type Result a = (Maybe a, State)
 -- | Parser combinator type.
 newtype Parser a = Parser { runParser :: State -> Result a }
 
--- | Returns a parser that will consume the given token with no errors.
+-- | Creates a parser that will return the given token with no errors.
 consumeOk :: a -> Parser a
 consumeOk x = Parser $ \s -> (Just x, s)
 
--- | Returns a parser that will consume the given token with the given error
+-- | Creates a parser that will return the given token with the given error
 -- message.
 consumeErr :: a -> String -> Parser a
 consumeErr x msg = Parser $ \s -> (Just x, addError msg s)
 
--- | Returns a parser that will consume nothing with no errors.
+-- | Creates a parser that will return nothing with no errors.
 emptyOk :: Parser a
 emptyOk = Parser $ \s -> (Nothing, s)
 
--- | Returns a parser that will consume nothing with the given error message.
+-- | Creates a parser that will return nothing with the given error message.
 emptyErr :: String -> Parser a
 emptyErr msg = Parser $ \s -> (Nothing, addError msg s)
 

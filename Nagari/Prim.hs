@@ -13,14 +13,14 @@ import Nagari.Utils
 -- Core parsers --
 ------------------
 
--- | Parses one character from the input stream.
+-- | Parses one character from the input.
 char :: Parser Char
 char = Parser $ \s -> case input s of
     []   -> (Nothing, s)
     x:xs -> let posModifier = if x == '\n' then incLine else incCol
             in (Just x, posModifier s { input = xs })
 
--- | Looks ahead one character in the input stream.
+-- | Looks ahead one character in the input.
 lookAhead :: Parser Char
 lookAhead = Parser $ \s -> case input s of
     []  -> (Nothing, s)
@@ -91,7 +91,7 @@ take = replicateM
           {-in [(results, unParsed)]-}
 
 -- | Builds a parser that will succeed as long as the predicate `p` is true for
--- characters in the input stream.
+-- characters in the input.
 takeWhile :: (Char -> Bool) -> Parser String
 takeWhile p = Parser $ \s ->
     let xs = input s
