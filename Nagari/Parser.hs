@@ -54,7 +54,7 @@ instance Monad Parser where
     Parser p >>= f = Parser $ \s ->
         let (x, s') = p s
         in case x of Just x' -> runParser (f x') s'
-                     Nothing -> (Nothing, s')
+                     Nothing -> (Nothing, s)
 
 instance MonadPlus Parser where
     mzero = mempty
