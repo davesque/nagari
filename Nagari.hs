@@ -1,36 +1,61 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE Rank2Types #-}
 
 module Nagari where
-
-import Control.Monad
-import Data.Char
-import qualified Data.List as L
-import Data.Monoid
-import Prelude hiding (filter, iterate, take, takeWhile, map)
-import qualified Prelude as P
 
 ----------------
 -- Data types --
 ----------------
 
+newtype Parser a = Parser {
+    runParser :: forall r . Input
+                         -- | ^ The input string to be parsed.
+                         -> More
+                         -- | ^ Whether or not the current parsing operation
+                         -- (e.g. the status of a compound parser) is finished.
+                         -> Failure r
+                         -- | ^ A failure continuation (callback).  Is invoked
+                         -- when the current parsing operation fails.
+                         -> Success a r
+                         -- | ^ A success continuation (callback).  Is invoked
+                         -- when the current parsing operation succeeds.
+                         -> Result r
+                         -- | ^ A final result value for the parsing operation.
+}
+
 type InputParsed   = ShowS
 type InputUnParsed = String
 type Input         = InputUnParsed
 
-data Result r = Fail    { unParsed :: InputUnParsed, errorDesc :: String }
-              | Partial { runPartial :: (InputUnParsed -> Result r) }
-              | Done    { unParsed :: InputUnParsed, result :: r }
-
 data More = Complete
           | Incomplete deriving (Show, Eq)
 
-type Failure r   = Input -> More -> String -> Result r
-type Success a r = Input -> More -> a -> Result r
+type Failure r   = Input
+                -- | ^ Any unparsed input left when the parsing operation
+                -- failed.
+                -> More
+                -- | ^ Was there any more input required for the current
+                -- parser?
+                -> String
+                -- | ^ A string describing the error that occurred.
+                -> Result r
+                -- | ^ A result value for the parsing operation.
 
--- | Parser combinator type.
-newtype Parser a = Parser {
-    runParser :: forall r. Input -> More -> Failure r -> Success a r -> Result r
-}
+type Success a r = Input
+                -- | ^ Any unparsed input left when the parsing operation
+                -- succeeded.
+                -> More
+                -- | ^ Was there any more input required for the current
+                -- parser?
+                -> a
+                -- | ^ A result value which may become part or all of the final
+                -- result value.
+                -> Result r
+                -- | ^ A result value for the parsing operation.
+
+data Result r = Fail    { unParsed :: InputUnParsed, errorDesc :: String }
+              | Partial { runPartial :: (InputUnParsed -> Result r) }
+              | Done    { unParsed :: InputUnParsed, result :: r }
 
 ---------------
 -- Instances --
@@ -39,157 +64,90 @@ newtype Parser a = Parser {
 instance Monad Parser where
     -- | Makes a parser that always runs the success continuation with the
     -- given value `a`.
-    return a = Parser $ \i m _kf ks -> ks i m a
+    return a = Parser $ \input more _failK successK -> successK input more a
 
     -- | Constructs a new parser using a binding function `f` and the success
     -- result of a parser `p`.  The new parser receives the old failure
     -- continuation but creates a new success continuation which produces its
     -- results with the parser resulting from the binding operation.
-    p >>= f = Parser $ \i m kf ks ->
-        runParser p i m kf (\i' m' a -> runParser (f a) i' m' kf ks)
+    p >>= f = Parser $ \input more failureK successK ->
+        runParser p input more failureK (\input' more' a -> runParser (f a) input' more' failureK successK)
 
-----------------------
--- Parsers builders --
-----------------------
+    fail err = Parser $ \i m kf _ks -> kf i m ("Failed reading: " ++ err)
 
-{-err :: String -> Parser a-}
-{-err xs = Parser $ \ys -> error $ xs ++ " near '" ++ ys ++ "'\n"-}
+-- | Terminal failure continuation.
+terminalFailureK :: Failure a
+terminalFailureK i _m msg = Fail i msg
 
-{--- | Alias for `mplus`.-}
-{-and :: Parser a -> Parser a -> Parser a-}
-{-and = mplus-}
+-- | Terminal success continuation.
+terminalSuccessK :: Success a a
+terminalSuccessK i _m a = Done i a
 
-{--- | Builds a parser that first attempts to parse with a parser `p` and falls-}
-{--- back to parsing with a parser `q` on failure.-}
-{-or :: Parser a -> Parser a -> Parser a-}
-{-p `or` q = Parser $ \xs -> case runParser p xs of-}
-    {-[] -> runParser q xs-}
-    {-r  -> r-}
+-- | Run a parser that cannot be resupplied via a 'Partial' result.
+parseOnly :: Parser a -> String -> Either String a
+parseOnly p s = case runParser p s Complete terminalFailureK terminalSuccessK of
+    Fail _ err -> Left err
+    Done _ a   -> Right a
+    _          -> error "parseOnly: impossible error!"
 
-{--- | Builds a parser that first attempts to parse with a parser `p` and falls-}
-{--- back to parsing with a parser `q` on failure.  Parser result type uses-}
-{--- `Either`.-}
-{-or' :: Parser a -> Parser b -> Parser (Either b a)-}
-{-p `or'` q = Parser $ \xs ->-}
-    {-case runParser p xs of-}
-    {-[] -> case runParser q xs of-}
-          {-[] -> []-}
-          {-r2 -> [(Left y, ys) | (y, ys) <- r2]-}
-    {-r1 -> [(Right y, ys) | (y, ys) <- r1]-}
+-- | Support function for uncommon case of ensure.
+ensure' :: Int
+        -> Input
+        -> More
+        -> Failure r
+        -> Success String r
+        -> Result r
+ensure' !n i m kf ks = runParser (demandInput >> go n) i m kf ks
+  where go !n' = Parser $ \i' m' kf' ks' -> if   length i' >= n'
+                                            then ks' i' m' i'
+                                            else runParser (demandInput >> go n') i' m' kf' ks'
 
-{--- | Alias for `fmap`.-}
-{-map :: (a -> b) -> Parser a -> Parser b-}
-{-map = fmap-}
+-- | If at least `n` elements of input are available, return the current input
+-- otherwise fail.
+ensure :: Int -> Parser String
+ensure !n = Parser $ \i m kf ks -> if   length i >= n
+                                   then ks i m i
+                                   else ensure' n i m kf ks
 
-{--- | Succeeds at parsing a single character if the given predicate is true for-}
-{--- the parser result.-}
-{-takeOneIf :: (Char -> Bool) -> Parser Char-}
-{-takeOneIf p = Parser $ \xs -> case xs of-}
-    {-[]   -> []-}
-    {-y:ys -> [(y, ys) | p y]-}
+-- | Ask for input.  If we receive any, pass it to a success continuation,
+-- otherwise to a failure continuation.
+prompt :: Input
+       -> More
+       -> (Input -> More -> Result r)
+       -> (Input -> More -> Result r)
+       -> Result r
+prompt i _m kf ks = Partial $ \s -> if   null s
+                                    then kf i Complete
+                                    else ks (i ++ s) Incomplete
 
-{-takeOneIf' :: (Char -> Bool) -> Parser Char-}
-{-takeOneIf' p = do-}
-    {-x <- char-}
-    {-if p x then return x else fail ""-}
+-- | Immediately demand more input via a 'Partial' continuation result.
+demandInput :: Parser ()
+demandInput = Parser $ \i m kf ks -> if   m == Complete
+                                     then kf i m "not enough input"
+                                     else let newFailureK i' m' = kf i' m' "not enough input"
+                                              newSuccessK i' m' = ks i' m' ()
+                                          in  prompt i m newFailureK newSuccessK
 
-{--- | Builds a parser which will apply itself to a string the given number of-}
-{--- times.-}
-{-take :: Int -> Parser a -> Parser [a]-}
-{-take = replicateM-}
+-- | The parser @satisfyWith f p@ transforms a character, and succeeds
+-- if the predicate @p@ returns 'True' on the transformed value. The
+-- parser returns the transformed character that was parsed.
+satisfy :: (Char -> Bool) -> Parser Char
+satisfy p = do
+  s <- ensure 1
+  let c = head s
+  if p c
+    then let !t = tail s
+         in  put t >> return c
+    else fail "satisfy"
 
-{--- | Used as helper function by `takeAll`.-}
-{-takeAll' :: Parser a -> Parser a-}
-{-takeAll' p = Parser $ \xs ->-}
-    {-let rs = runParser p xs-}
-    {-in  rs ++ concat [runParser (takeAll' p) ys | (_, ys) <- rs]-}
+put :: String -> Parser ()
+put s = Parser $ \_i m _kf ks -> ks s m ()
 
-{--- | Builds a parser which will apply itself to a string until further-}
-{--- applications yield no results.-}
-{-takeAll :: Parser a -> Parser [a]-}
-{-takeAll p = Parser $ \xs -> case runParser (takeAll' p) xs of-}
-    {-[] -> []-}
-    {-rs -> let unParsed = snd . last $ rs-}
-              {-results  = P.map fst rs-}
-          {-in [(results, unParsed)]-}
+anyChar :: Parser Char
+anyChar = satisfy $ const True
 
-{--- | Builds a parser that will succeed as long as the predicate `p` is true for-}
-{--- characters in the input stream.-}
-{-takeWhile :: (Char -> Bool) -> Parser String-}
-{-takeWhile p = Parser $ \xs -> case xs of-}
-    {-[] -> []-}
-    {-_  -> let (xsInit, xsTail) = span p xs-}
-          {-in [(xsInit, xsTail) | not . null $ xsInit]-}
-
-{--- | Finds the index of the first occurrence of a list `xs` in a list `ys`.-}
-{-findIn :: (Eq a) => [a] -> [a] -> Maybe Int-}
-{-findIn _ []  = Nothing-}
-{-findIn [] _  = Nothing-}
-{-findIn xs ys = L.elemIndex True $ L.map (L.isPrefixOf xs) (L.tails ys)-}
-
-{--- | Builds a parser which parses a string until an occurrence of string `s` is-}
-{--- found.  Fails if nothing is found.-}
-{-takeUntil :: String -> Parser String-}
-{-takeUntil s = Parser $ \xs -> case findIn s xs of-}
-    {-Nothing -> []-}
-    {-Just i  -> [splitAt i xs]-}
-
-{--- | Builds a parser which performs its action and then consumes any whitespace-}
-{--- after the parsed content.-}
-{-token :: Parser a -> Parser a-}
-{-token p = do-}
-    {-x <- p-}
-    {-takeWhile isSpace-}
-    {-return x-}
-
-{--- | Parses a sequence of letters.-}
-{-letters :: Parser String-}
-{-letters = takeWhile isAlpha-}
-
-{--- | Parses a tokenized sequence of letters.-}
-{-word :: Parser String-}
-{-word = token letters-}
-
-{--- | Parses a sequence of digits and returns its integer value.-}
-{-number :: Parser Int-}
-{-number = map read $ takeWhile isDigit-}
-
-{--- | Parses a specific string from the input.-}
-{-accept :: String -> Parser String-}
-{-accept s = do-}
-    {-t <- take (length s) char-}
-    {-if s == t then return t else fail ""-}
-
-{--------------------}
-{--- Core parsers ---}
-{--------------------}
-
-{--- | Parses a single character.-}
-{-char :: Parser Char-}
-{-char = Parser $ \xs -> case xs of-}
-    {-[]   -> []-}
-    {-y:ys -> [(y, ys)]-}
-
-{--- | Parses a single whitespace character.-}
-{-space :: Parser Char-}
-{-space = takeOneIf isSpace-}
-
-{--- | Parses a single alphabetical character.-}
-{-alpha :: Parser Char-}
-{-alpha = takeOneIf isAlpha-}
-
-{--- | Parses a single digit character.-}
-{-digit :: Parser Char-}
-{-digit = takeOneIf isDigit-}
-
-{--- | Parses a single alpha-numerical character.-}
-{-alphaNum :: Parser Char-}
-{-alphaNum = takeOneIf isAlphaNum-}
-
-{--- | Parses one of a given character `x`.-}
-{-lit :: Char -> Parser Char-}
-{-lit x = takeOneIf (==x)-}
-
-{--- | Succeeds at parsing a character which is not the given character `x`.-}
-{-unLit :: Char -> Parser Char-}
-{-unLit x = takeOneIf (/=x)-}
+twoChars :: Parser String
+twoChars = do
+    a <- anyChar
+    b <- anyChar
+    return [a, b]
