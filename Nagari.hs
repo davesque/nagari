@@ -69,9 +69,9 @@ instance Monad Parser where
     -- | Takes a parser `p` and binds its result to a function `f` which uses
     -- the result value to create and return another parser.  Allows for
     -- combining of parsers using do notation.
-    p >>= f = Parser $ \xs -> case runParser p xs of
-        Success y ys  -> runParser (f y) ys
-        Failure r     -> Failure r
+    p >>= f = Parser $ \i -> case runParser p i of
+        Success x i' -> runParser (f x) i'
+        Failure r    -> Failure r
 
 -- | Begins a parsing operation at cursor position 0, 0 with the given parser
 -- `p`.
