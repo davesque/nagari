@@ -88,8 +88,8 @@ abort msg = Parser $ \i -> failure i msg
 --------------------------------------------------------------------------------
 
 -- | Parses a single character.
-char :: Parser Char
-char = Parser $ \i@(Input m p xs) -> case xs of
+takeOne :: Parser Char
+takeOne = Parser $ \i@(Input m p xs) -> case xs of
     y:ys -> if   y == '\n'
             then Success y $ Input m (nextLine p) ys
             else Success y $ Input m (nextCol p) ys
@@ -97,14 +97,14 @@ char = Parser $ \i@(Input m p xs) -> case xs of
 
 -- | Parses a single character if the given predicate `p` returns `True` when
 -- applied to the parsed result.
-charIf :: (Char -> Bool) -> String -> Parser Char
-charIf p msg = do
-    x <- char
+takeOneIf :: (Char -> Bool) -> String -> Parser Char
+takeOneIf p msg = do
+    x <- takeOne
     if p x then return x else abort msg
 
 -- | Parses a single alphabetical character.
 alpha :: Parser Char
-alpha = charIf isAlpha "expected alphabetical character"
+alpha = takeOneIf isAlpha "expected alphabetical character"
 
 take :: Int -> Parser a -> Parser [a]
 take = replicateM
