@@ -29,7 +29,7 @@ type InputType = String
 
 -- | Input wrapper type which includes meta data about cursor position.
 data Input = Input {
-                mark     :: Position,
+                mark :: Position,
                 -- | ^ The cursor position which marks the beginning of the
                 -- current parsing operation.  This position is reset to the
                 -- active cursor position whenever a value is returned in the
@@ -38,7 +38,7 @@ data Input = Input {
                 -- | ^ The active cursor position of the parsing operation.
                 -- This position is incremented whenever a character is
                 -- consumed from the input.
-                content  :: InputType
+                content :: InputType
                 -- | ^ The content which is being parsed.
              } deriving (Show)
 
