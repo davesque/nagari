@@ -93,7 +93,7 @@ takeOne = Parser $ \i@(Input m p xs) -> case xs of
     y:ys -> if   y == '\n'
             then Success y $ Input m (nextLine p) ys
             else Success y $ Input m (nextCol p) ys
-    _    -> failure i "More input expected"
+    _    -> failure i "more input expected"
 
 -- | Parses a single character if the given predicate `p` returns `True` when
 -- applied to the parsed result.
