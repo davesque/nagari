@@ -111,9 +111,18 @@ take = replicateM
 
 -- | Used as helper function by `takeAll`.
 takeAll' :: Parser a -> Parser a
-takeAll' p = Parser $ \xs ->
-    let rs = runParser p xs
+takeAll' p = Parser $ \i ->
+    let rs = runParser p i
     in  rs ++ concat [runParser (takeAll' p) ys | (_, ys) <- rs]
+
+-- | Builds a parser which will apply itself to a string until further
+-- applications yield no results.
+takeAll :: Parser a -> Parser [a]
+takeAll p = Parser $ \i -> case runParser p i of
+    Success x i' ->
+    rs -> let unParsed = snd . last $ rs
+              results  = P.map fst rs
+          in [(results, unParsed)]
 
 -- | Builds a parser which will apply itself to a string until further
 -- applications yield no results.
